@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-bg text-ink font-sans antialiased;
+    background-image:
+      radial-gradient(
+        60rem 60rem at 80% -10%,
+        rgba(139, 92, 246, 0.08),
+        transparent 60%
+      ),
+      radial-gradient(
+        50rem 50rem at -10% 0%,
+        rgba(34, 211, 238, 0.07),
+        transparent 55%
+      );
+    background-attachment: fixed;
+  }
+
+  * {
+    @apply border-line;
+  }
+
+  ::selection {
+    background: rgba(34, 211, 238, 0.25);
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-line bg-bg-soft/80 shadow-card backdrop-blur-sm;
+  }
+
+  .input {
+    @apply w-full rounded-lg border border-line bg-bg/60 px-3 py-2 text-sm text-ink
+      placeholder:text-ink-faint outline-none transition
+      focus:border-flux-cyan/60 focus:ring-2 focus:ring-flux-cyan/20;
+  }
+
+  .label {
+    @apply mb-1.5 block text-xs font-medium uppercase tracking-wide text-ink-muted;
+  }
+
+  .btn {
+    @apply inline-flex select-none items-center justify-center gap-2 rounded-lg px-4 py-2
+      text-sm font-semibold transition focus:outline-none focus-visible:ring-2
+      focus-visible:ring-flux-cyan/40 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply btn bg-gradient-to-r from-flux-cyan to-flux-violet text-bg
+      hover:brightness-110 active:brightness-95;
+  }
+
+  .btn-ghost {
+    @apply btn border border-line bg-bg-raised/60 text-ink hover:border-flux-cyan/40
+      hover:bg-bg-raised;
+  }
+
+  .btn-danger {
+    @apply btn border border-flux-red/30 bg-flux-red/10 text-flux-red
+      hover:bg-flux-red/20;
+  }
+
+  .link {
+    @apply text-flux-cyan transition hover:text-flux-cyan/80;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #243056;
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2f3d6b;
+  background-clip: content-box;
+}
