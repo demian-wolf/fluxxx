@@ -1,12 +1,7 @@
 import { Request, Response, NextFunction } from "express";
+import { verifyUserToken } from "../services/auth";
 
-/**
- * Require an authenticated human operator.
- *
- * Skeleton stub: Base44 provides built-in user auth. This placeholder reads the
- * bearer token and treats it as the user id. Replace with real JWT validation
- * against Base44's auth provider.
- */
+/** Require an authenticated human operator (JWT issued by POST /api/auth/login). */
 export function userAuth(req: Request, res: Response, next: NextFunction): void {
   const header = req.header("authorization");
   if (!header || !header.toLowerCase().startsWith("bearer ")) {
@@ -18,7 +13,11 @@ export function userAuth(req: Request, res: Response, next: NextFunction): void 
     res.status(401).json({ error: "invalid_user_token" });
     return;
   }
-  // TODO: verify token with Base44 auth and resolve the real user id.
-  req.userId = token;
-  next();
+  try {
+    const claims = verifyUserToken(token);
+    req.userId = claims.sub;
+    next();
+  } catch {
+    res.status(401).json({ error: "invalid_user_token" });
+  }
 }

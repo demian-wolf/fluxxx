@@ -1,4 +1,5 @@
 import express, { Request, Response, NextFunction } from "express";
+import cors from "cors";
 import authRoutes from "./routes/auth";
 import agentRoutes from "./routes/agents";
 import transactionRoutes from "./routes/transactions";
@@ -9,6 +10,7 @@ import walletRoutes from "./routes/wallets";
 
 export function createApp(): express.Express {
   const app = express();
+  app.use(cors());
   app.use(express.json());
 
   app.get("/health", (_req, res) => {

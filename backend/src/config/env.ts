@@ -24,6 +24,10 @@ export const config = {
   port: int("PORT", 3000),
   nodeEnv: process.env.NODE_ENV ?? "development",
 
+  database: {
+    url: required("DATABASE_URL"),
+  },
+
   mollie: {
     apiKey: process.env.MOLLIE_API_KEY ?? "",
     webhookUrl: process.env.MOLLIE_WEBHOOK_URL ?? "",
@@ -31,14 +35,11 @@ export const config = {
   },
 
   flux: {
-    jwtSecret: required("FLUX_JWT_SECRET", "dev_insecure_secret"),
+    jwtSecret: required("SESSION_SECRET", "dev_insecure_secret"),
     tokenTtlSeconds: int("FLUX_TOKEN_TTL_SECONDS", 30),
-    sessionTtlSeconds: int("FLUX_SESSION_TTL_SECONDS", 3600),
+    sessionTtlSeconds: int("FLUX_SESSION_TTL_SECONDS", 86400),
     providerApiKey: process.env.FLUX_PROVIDER_API_KEY ?? "",
-  },
-
-  base44: {
-    appUrl: process.env.BASE44_APP_URL ?? "",
+    appUrl: process.env.FLUX_APP_URL ?? "",
   },
 } as const;
 

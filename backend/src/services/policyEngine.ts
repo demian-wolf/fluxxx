@@ -3,8 +3,8 @@
  * section 3. Evaluates a transaction request against the agent's active policy,
  * rolling spend windows, wallet balance, and domain rules.
  */
-import { AgentIdentity, AgentWallet, SpendPolicy } from "../models";
-import { AgentStatus, RejectionReason } from "../types";
+import { AgentIdentity, AgentWallet, SpendPolicy } from "../db/schema";
+import { RejectionReason } from "../types";
 import { spentInWindow } from "./ledger";
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
@@ -46,24 +46,35 @@ function domainOf(url: string): string {
   }
 }
 
+type PolicyRules = {
+  hourly_limit_cents: number;
+  per_tx_limit_cents: number;
+  daily_limit_cents: number;
+  allowed_domains?: string[];
+  blocked_domains?: string[];
+  require_description?: boolean;
+  auto_suspend_on_anomaly?: boolean;
+};
+
 /**
  * Run the full policy evaluation chain. Returns the first failing check, or an
- * approval if every check passes. This function is side-effect free; callers
- * perform the atomic deduct + ledger write on approval.
+ * approval if every check passes.
  */
-export function evaluate(input: EvaluationInput): EvaluationResult {
+export async function evaluate(input: EvaluationInput): Promise<EvaluationResult> {
   const { agent, wallet, policy, amountCents, payeeUrl, description } = input;
 
-  // Effective limits: policy rules override the agent defaults when present.
-  const perTxLimit = policy?.rules.per_tx_limit_cents ?? agent.per_tx_limit_cents;
-  const hourlyLimit = policy?.rules.hourly_limit_cents ?? agent.hourly_limit_cents;
-  const dailyLimit = policy?.rules.daily_limit_cents ?? agent.daily_limit_cents;
+  const rules = policy?.rules as PolicyRules | undefined;
 
-  if (agent.status !== AgentStatus.Active) {
+  // Effective limits: policy rules override the agent defaults when present.
+  const perTxLimit  = rules?.per_tx_limit_cents  ?? agent.perTxLimitCents;
+  const hourlyLimit = rules?.hourly_limit_cents   ?? agent.hourlyLimitCents;
+  const dailyLimit  = rules?.daily_limit_cents    ?? agent.dailyLimitCents;
+
+  if (agent.status !== "active") {
     return reject(RejectionReason.AgentSuspended);
   }
 
-  if (policy?.rules.require_description && description.trim() === "") {
+  if (rules?.require_description && description.trim() === "") {
     return reject(RejectionReason.MissingDescription);
   }
 
@@ -76,7 +87,7 @@ export function evaluate(input: EvaluationInput): EvaluationResult {
   }
 
   // [Check hourly rolling window]
-  const hourlySpent = spentInWindow(wallet.id, agent.id, ONE_HOUR_MS);
+  const hourlySpent = await spentInWindow(wallet.id, agent.id, ONE_HOUR_MS);
   if (hourlySpent + amountCents > hourlyLimit) {
     return reject(RejectionReason.HourlyLimitExceeded, {
       hourly_spent_cents: hourlySpent,
@@ -85,7 +96,7 @@ export function evaluate(input: EvaluationInput): EvaluationResult {
   }
 
   // [Check daily rolling window]
-  const dailySpent = spentInWindow(wallet.id, agent.id, ONE_DAY_MS);
+  const dailySpent = await spentInWindow(wallet.id, agent.id, ONE_DAY_MS);
   if (dailySpent + amountCents > dailyLimit) {
     return reject(RejectionReason.DailyLimitExceeded, {
       daily_spent_cents: dailySpent,
@@ -94,20 +105,21 @@ export function evaluate(input: EvaluationInput): EvaluationResult {
   }
 
   // [Check wallet balance]
-  if (wallet.balance_cents < amountCents) {
+  if (wallet.balanceCents < amountCents) {
     return reject(RejectionReason.InsufficientBalance, {
-      balance_cents: wallet.balance_cents,
+      balance_cents: wallet.balanceCents,
       requested_cents: amountCents,
     });
   }
 
   // [Check domain allowlist / blocklist]
   const domain = domainOf(payeeUrl);
-  const blocked = policy?.rules.blocked_domains ?? [];
+  const blocked = rules?.blocked_domains ?? [];
   if (blocked.includes(domain)) {
     return reject(RejectionReason.DomainBlocked);
   }
-  if (agent.allowed_domains.length > 0 && !agent.allowed_domains.includes(domain)) {
+  const agentAllowed = agent.allowedDomains ?? [];
+  if (agentAllowed.length > 0 && !agentAllowed.includes(domain)) {
     return reject(RejectionReason.DomainBlocked);
   }
 

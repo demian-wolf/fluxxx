@@ -1,9 +1,10 @@
 import { Router } from "express";
-import { store } from "../store";
+import { eq } from "drizzle-orm";
+import { db } from "../db";
+import { agentWalletsTable, molliePaymentsTable } from "../db/schema";
 import { asyncHandler } from "../utils/asyncHandler";
 import { getPayment } from "../services/mollie";
 import { writeLedgerEntry } from "../services/ledger";
-import { LedgerEntryType, MolliePaymentStatus } from "../types";
 
 const router = Router();
 
@@ -23,9 +24,12 @@ router.post(
       return;
     }
 
-    const record = [...store.molliePayments.values()].find(
-      (p) => p.mollie_payment_id === molliePaymentId,
-    );
+    const [record] = await db
+      .select()
+      .from(molliePaymentsTable)
+      .where(eq(molliePaymentsTable.molliePaymentId, molliePaymentId))
+      .limit(1);
+
     if (!record) {
       // Acknowledge to stop retries even if we don't recognise the payment.
       res.status(200).json({ received: true });
@@ -33,31 +37,43 @@ router.post(
     }
 
     const remote = await getPayment(molliePaymentId);
-    record.webhook_received_at = new Date().toISOString();
+    const now = new Date();
 
-    if (remote.status === MolliePaymentStatus.Paid) {
-      if (record.status !== MolliePaymentStatus.Paid) {
-        record.status = MolliePaymentStatus.Paid;
-        const wallet = store.wallets.get(record.wallet_id);
-        if (wallet) {
-          writeLedgerEntry({
-            wallet,
-            agentId: null,
-            type: LedgerEntryType.Deposit,
-            amountCents: record.amount_cents,
-            description: "Mollie deposit",
-            molliePaymentId,
-          });
-        }
+    if (remote.status === "paid" && record.status !== "paid") {
+      const [wallet] = await db
+        .select({ id: agentWalletsTable.id, balanceCents: agentWalletsTable.balanceCents })
+        .from(agentWalletsTable)
+        .where(eq(agentWalletsTable.id, record.walletId))
+        .limit(1);
+
+      if (wallet) {
+        await writeLedgerEntry({
+          walletId:           wallet.id,
+          walletBalanceCents: wallet.balanceCents,
+          agentId:            null,
+          type:               "deposit",
+          amountCents:        record.amountCents,
+          description:        "Mollie deposit",
+          molliePaymentId,
+        });
       }
-    } else if (
-      remote.status === MolliePaymentStatus.Failed ||
-      remote.status === MolliePaymentStatus.Expired
-    ) {
-      record.status = remote.status;
+
+      await db
+        .update(molliePaymentsTable)
+        .set({ status: "paid", webhookReceivedAt: now })
+        .where(eq(molliePaymentsTable.id, record.id));
+    } else if (remote.status === "failed" || remote.status === "expired") {
+      await db
+        .update(molliePaymentsTable)
+        .set({ status: remote.status, webhookReceivedAt: now })
+        .where(eq(molliePaymentsTable.id, record.id));
+    } else {
+      await db
+        .update(molliePaymentsTable)
+        .set({ webhookReceivedAt: now })
+        .where(eq(molliePaymentsTable.id, record.id));
     }
 
-    store.molliePayments.set(record.id, record);
     res.status(200).json({ received: true });
   }),
 );

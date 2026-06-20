@@ -1,17 +1,15 @@
 import { Router } from "express";
-import { v4 as uuidv4 } from "uuid";
-import { store, findActivePolicy } from "../store";
+import { and, desc, eq, inArray } from "drizzle-orm";
+import { db } from "../db";
+import { agentIdentitiesTable, agentWalletsTable, spendPoliciesTable, transactionRequestsTable } from "../db/schema";
 import { agentAuth } from "../middleware/agentAuth";
+import { userAuth } from "../middleware/userAuth";
+import { asyncHandler } from "../utils/asyncHandler";
 import { evaluate } from "../services/policyEngine";
 import { writeLedgerEntry } from "../services/ledger";
 import { generatePaymentToken } from "../services/auth";
 import { config } from "../config/env";
-import { TransactionRequest } from "../models";
-import {
-  LedgerEntryType,
-  RejectionReason,
-  TransactionDecision,
-} from "../types";
+import { RejectionReason } from "../types";
 
 const router = Router();
 
@@ -26,97 +24,198 @@ function retryAfterSeconds(reason: RejectionReason): number | undefined {
  * POST /api/transactions/request — core HTTP 402 flow.
  * (backend-architecture.md section 2.2)
  */
-router.post("/request", agentAuth, (req, res) => {
-  const session = req.agent!;
-  const { amount_cents, payee_url, description } = req.body ?? {};
+router.post(
+  "/request",
+  agentAuth,
+  asyncHandler(async (req, res) => {
+    const session = req.agent!;
+    const { amount_cents, payee_url, description } = req.body ?? {};
 
-  if (typeof amount_cents !== "number" || amount_cents <= 0) {
-    res.status(400).json({ error: "invalid_amount" });
-    return;
-  }
-  if (typeof payee_url !== "string") {
-    res.status(400).json({ error: "missing_payee_url" });
-    return;
-  }
+    if (typeof amount_cents !== "number" || amount_cents <= 0) {
+      res.status(400).json({ error: "invalid_amount" });
+      return;
+    }
+    if (typeof payee_url !== "string") {
+      res.status(400).json({ error: "missing_payee_url" });
+      return;
+    }
 
-  const agent = store.agents.get(session.sub);
-  const wallet = store.wallets.get(session.wallet_id);
-  if (!agent || !wallet) {
-    res.status(404).json({ error: "agent_or_wallet_not_found" });
-    return;
-  }
+    const [agent] = await db
+      .select()
+      .from(agentIdentitiesTable)
+      .where(eq(agentIdentitiesTable.id, session.sub))
+      .limit(1);
 
-  const policy = findActivePolicy(agent.id);
-  const result = evaluate({
-    agent,
-    wallet,
-    policy,
-    amountCents: amount_cents,
-    payeeUrl: payee_url,
-    description: typeof description === "string" ? description : "",
-  });
+    const [wallet] = await db
+      .select()
+      .from(agentWalletsTable)
+      .where(eq(agentWalletsTable.id, session.wallet_id))
+      .limit(1);
 
-  const now = new Date().toISOString();
-  const txn: TransactionRequest = {
-    id: uuidv4(),
-    agent_id: agent.id,
-    wallet_id: wallet.id,
-    requested_amount_cents: amount_cents,
-    payee_url,
-    description: typeof description === "string" ? description : "",
-    decision: TransactionDecision.Pending,
-    rejection_reason: null,
-    payment_token: null,
-    token_expires_at: null,
-    ledger_entry_id: null,
-    created_at: now,
-  };
+    if (!agent || !wallet) {
+      res.status(404).json({ error: "agent_or_wallet_not_found" });
+      return;
+    }
 
-  if (!result.approved) {
-    txn.decision = TransactionDecision.Rejected;
-    txn.rejection_reason = result.reason;
-    store.transactions.set(txn.id, txn);
+    const [policy] = await db
+      .select()
+      .from(spendPoliciesTable)
+      .where(and(eq(spendPoliciesTable.agentId, agent.id), eq(spendPoliciesTable.isActive, true)))
+      .limit(1);
 
-    res.status(402).json({
-      decision: "rejected",
-      rejection_reason: result.reason,
-      ...(result.details ?? {}),
-      ...(retryAfterSeconds(result.reason) !== undefined
-        ? { retry_after_seconds: retryAfterSeconds(result.reason) }
-        : {}),
+    const desc = typeof description === "string" ? description : "";
+    const result = await evaluate({
+      agent,
+      wallet,
+      policy,
+      amountCents:  amount_cents,
+      payeeUrl:     payee_url,
+      description:  desc,
     });
-    return;
-  }
 
-  // Approved: atomically deduct balance, write ledger entry, issue token.
-  const token = generatePaymentToken();
-  const expiresAt = new Date(
-    Date.now() + config.flux.tokenTtlSeconds * 1000,
-  ).toISOString();
+    if (!result.approved) {
+      await db.insert(transactionRequestsTable).values({
+        agentId:              agent.id,
+        walletId:             wallet.id,
+        requestedAmountCents: amount_cents,
+        payeeUrl:             payee_url,
+        description:          desc,
+        decision:             "rejected",
+        rejectionReason:      result.reason,
+      });
 
-  const entry = writeLedgerEntry({
-    wallet,
-    agentId: agent.id,
-    type: LedgerEntryType.Spend,
-    amountCents: amount_cents,
-    description: txn.description,
-    payeeUrl: payee_url,
-    paymentToken: token,
-  });
+      res.status(402).json({
+        decision:         "rejected",
+        rejection_reason: result.reason,
+        ...(result.details ?? {}),
+        ...(retryAfterSeconds(result.reason) !== undefined
+          ? { retry_after_seconds: retryAfterSeconds(result.reason) }
+          : {}),
+      });
+      return;
+    }
 
-  txn.decision = TransactionDecision.Approved;
-  txn.payment_token = token;
-  txn.token_expires_at = expiresAt;
-  txn.ledger_entry_id = entry.id;
-  store.transactions.set(txn.id, txn);
+    // Approved: atomically write ledger entry + update balance, then issue token.
+    const token     = generatePaymentToken();
+    const expiresAt = new Date(Date.now() + config.flux.tokenTtlSeconds * 1000);
 
-  res.json({
-    decision: "approved",
-    payment_token: token,
-    token_expires_at: expiresAt,
-    balance_after_cents: entry.balance_after_cents,
-    transaction_id: txn.id,
-  });
-});
+    const entry = await writeLedgerEntry({
+      walletId:           wallet.id,
+      walletBalanceCents: wallet.balanceCents,
+      agentId:            agent.id,
+      type:               "spend",
+      amountCents:        amount_cents,
+      description:        desc,
+      payeeUrl:           payee_url,
+      paymentToken:       token,
+    });
+
+    const [txn] = await db
+      .insert(transactionRequestsTable)
+      .values({
+        agentId:              agent.id,
+        walletId:             wallet.id,
+        requestedAmountCents: amount_cents,
+        payeeUrl:             payee_url,
+        description:          desc,
+        decision:             "approved",
+        paymentToken:         token,
+        tokenExpiresAt:       expiresAt,
+        ledgerEntryId:        entry.id,
+      })
+      .returning({ id: transactionRequestsTable.id });
+
+    res.json({
+      decision:            "approved",
+      payment_token:       token,
+      token_expires_at:    expiresAt.toISOString(),
+      balance_after_cents: entry.balanceAfterCents,
+      transaction_id:      txn.id,
+    });
+  }),
+);
+
+/**
+ * GET /api/transactions
+ * List transaction requests for the operator's agents (filterable).
+ */
+router.get(
+  "/",
+  userAuth,
+  asyncHandler(async (req, res) => {
+    const { wallet_id, agent_ids, type } = req.query;
+
+    const agentRows = await db
+      .select({ id: agentIdentitiesTable.id })
+      .from(agentIdentitiesTable)
+      .where(eq(agentIdentitiesTable.ownerId, req.userId as string));
+
+    if (agentRows.length === 0) {
+      res.json([]);
+      return;
+    }
+
+    let agentIds = agentRows.map((a) => a.id);
+    if (typeof agent_ids === "string" && agent_ids) {
+      const requested = agent_ids.split(",");
+      agentIds = agentIds.filter((id) => requested.includes(id));
+    }
+
+    const conditions = [inArray(transactionRequestsTable.agentId, agentIds)];
+    if (typeof wallet_id === "string" && wallet_id) {
+      conditions.push(eq(transactionRequestsTable.walletId, wallet_id));
+    }
+    if (typeof type === "string" && ["approved", "rejected"].includes(type)) {
+      conditions.push(eq(transactionRequestsTable.decision, type as "approved" | "rejected"));
+    }
+
+    const txns = await db
+      .select()
+      .from(transactionRequestsTable)
+      .where(and(...conditions))
+      .orderBy(desc(transactionRequestsTable.createdAt))
+      .limit(200);
+
+    res.json(txns);
+  }),
+);
+
+/**
+ * GET /api/transactions/:id
+ * Get a single transaction request by ID.
+ */
+router.get(
+  "/:id",
+  userAuth,
+  asyncHandler(async (req, res) => {
+    const agentRows = await db
+      .select({ id: agentIdentitiesTable.id })
+      .from(agentIdentitiesTable)
+      .where(eq(agentIdentitiesTable.ownerId, req.userId as string));
+
+    const agentIds = agentRows.map((a) => a.id);
+    if (agentIds.length === 0) {
+      res.status(404).json({ error: "transaction_not_found" });
+      return;
+    }
+
+    const [txn] = await db
+      .select()
+      .from(transactionRequestsTable)
+      .where(
+        and(
+          eq(transactionRequestsTable.id, req.params.id),
+          inArray(transactionRequestsTable.agentId, agentIds),
+        ),
+      )
+      .limit(1);
+
+    if (!txn) {
+      res.status(404).json({ error: "transaction_not_found" });
+      return;
+    }
+    res.json(txn);
+  }),
+);
 
 export default router;

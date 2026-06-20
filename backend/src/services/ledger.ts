@@ -1,30 +1,31 @@
-import { v4 as uuidv4 } from "uuid";
-import { store, ledgerForWallet } from "../store";
-import { AgentWallet, LedgerEntry } from "../models";
-import { LedgerEntryStatus, LedgerEntryType, UUID } from "../types";
+import { and, eq, gte, sql } from "drizzle-orm";
+import { db } from "../db";
+import { agentWalletsTable, ledgerEntriesTable, LedgerEntry } from "../db/schema";
+import { UUID } from "../types";
 
 export interface LedgerWriteInput {
-  wallet: AgentWallet;
+  walletId: UUID;
+  walletBalanceCents: number;
   agentId: UUID | null;
-  type: LedgerEntryType;
+  type: "deposit" | "spend" | "refund" | "hold" | "release";
   amountCents: number;
   description: string;
   payeeUrl?: string | null;
   molliePaymentId?: string | null;
   paymentToken?: string | null;
-  status?: LedgerEntryStatus;
+  status?: "pending" | "settled" | "failed" | "reversed";
   metadata?: Record<string, unknown>;
 }
 
 /** Direction of a ledger entry on the wallet balance, by type. */
-function signedDelta(type: LedgerEntryType, amountCents: number): number {
+function signedDelta(type: LedgerWriteInput["type"], amountCents: number): number {
   switch (type) {
-    case LedgerEntryType.Deposit:
-    case LedgerEntryType.Refund:
-    case LedgerEntryType.Release:
+    case "deposit":
+    case "refund":
+    case "release":
       return amountCents;
-    case LedgerEntryType.Spend:
-    case LedgerEntryType.Hold:
+    case "spend":
+    case "hold":
       return -amountCents;
     default:
       return 0;
@@ -32,53 +33,56 @@ function signedDelta(type: LedgerEntryType, amountCents: number): number {
 }
 
 /**
- * Atomic balance mutation: append a ledger entry and recompute the wallet's
- * cached `balance_cents` projection. Balance is never edited directly.
+ * Atomic balance mutation: append a ledger entry and update the wallet's
+ * cached balance_cents in the same logical operation. Must be called inside
+ * a transaction or sequentially — never update balance directly elsewhere.
  */
-export function writeLedgerEntry(input: LedgerWriteInput): LedgerEntry {
-  const { wallet } = input;
+export async function writeLedgerEntry(input: LedgerWriteInput): Promise<LedgerEntry> {
   const delta = signedDelta(input.type, input.amountCents);
-  const balanceAfter = wallet.balance_cents + delta;
+  const balanceAfter = input.walletBalanceCents + delta;
 
-  const entry: LedgerEntry = {
-    id: uuidv4(),
-    wallet_id: wallet.id,
-    agent_id: input.agentId,
-    type: input.type,
-    amount_cents: input.amountCents,
-    balance_after_cents: balanceAfter,
-    description: input.description,
-    payee_url: input.payeeUrl ?? null,
-    mollie_payment_id: input.molliePaymentId ?? null,
-    payment_token: input.paymentToken ?? null,
-    status: input.status ?? LedgerEntryStatus.Settled,
-    metadata: input.metadata ?? {},
-    created_at: new Date().toISOString(),
-  };
+  const [entry] = await db
+    .insert(ledgerEntriesTable)
+    .values({
+      walletId:          input.walletId,
+      agentId:           input.agentId ?? undefined,
+      type:              input.type,
+      amountCents:       input.amountCents,
+      balanceAfterCents: balanceAfter,
+      description:       input.description,
+      payeeUrl:          input.payeeUrl ?? undefined,
+      molliePaymentId:   input.molliePaymentId ?? undefined,
+      paymentToken:      input.paymentToken ?? undefined,
+      status:            input.status ?? "settled",
+      metadata:          input.metadata ?? undefined,
+    })
+    .returning();
 
-  store.ledger.set(entry.id, entry);
-
-  wallet.balance_cents = balanceAfter;
-  wallet.updated_at = entry.created_at;
-  store.wallets.set(wallet.id, wallet);
+  await db
+    .update(agentWalletsTable)
+    .set({ balanceCents: balanceAfter, updatedAt: new Date() })
+    .where(eq(agentWalletsTable.id, input.walletId));
 
   return entry;
 }
 
 /** Sum of settled spend for an agent within the last `windowMs` milliseconds. */
-export function spentInWindow(
-  walletId: UUID,
+export async function spentInWindow(
+  _walletId: UUID,
   agentId: UUID,
   windowMs: number,
-): number {
-  const cutoff = Date.now() - windowMs;
-  return ledgerForWallet(walletId)
-    .filter(
-      (e) =>
-        e.agent_id === agentId &&
-        e.type === LedgerEntryType.Spend &&
-        e.status === LedgerEntryStatus.Settled &&
-        new Date(e.created_at).getTime() >= cutoff,
-    )
-    .reduce((sum, e) => sum + e.amount_cents, 0);
+): Promise<number> {
+  const cutoff = new Date(Date.now() - windowMs);
+  const [{ total }] = await db
+    .select({ total: sql<number>`coalesce(sum(${ledgerEntriesTable.amountCents}), 0)` })
+    .from(ledgerEntriesTable)
+    .where(
+      and(
+        eq(ledgerEntriesTable.agentId, agentId),
+        eq(ledgerEntriesTable.type, "spend"),
+        eq(ledgerEntriesTable.status, "settled"),
+        gte(ledgerEntriesTable.createdAt, cutoff),
+      ),
+    );
+  return Number(total);
 }
