@@ -1,62 +1,121 @@
 /**
  * Mollie integration (backend-architecture.md section 4).
  *
- * Skeleton stubs: the real implementation should call the Mollie REST API
- * (`POST /v2/payments`, `GET /v2/payments/{id}`) using `config.mollie.apiKey`
- * and an idempotency key. Network calls are intentionally omitted here.
+ * Real REST calls to api.mollie.com using MOLLIE_API_KEY.
+ * Idempotency-Key header guards against duplicate processing on webhook retries.
  */
 import { v4 as uuidv4 } from "uuid";
 import { config } from "../config/env";
-import { MolliePaymentStatus } from "../types";
+
+const MOLLIE_BASE = "https://api.mollie.com/v2";
+
+type MollieStatus = "open" | "pending" | "paid" | "failed" | "expired";
 
 export interface CreatePaymentInput {
   amountCents: number;
   description: string;
-  /** Idempotency key to guard against duplicate webhook-triggered creates. */
   idempotencyKey?: string;
 }
 
 export interface CreatePaymentResult {
   molliePaymentId: string;
   checkoutUrl: string;
-  status: MolliePaymentStatus;
+  status: MollieStatus;
   expiresAt: string;
 }
 
 export interface RemotePayment {
   id: string;
-  status: MolliePaymentStatus;
+  status: MollieStatus;
   amountCents: number;
+}
+
+function authHeader(): string {
+  return `Bearer ${config.mollie.apiKey}`;
 }
 
 /**
  * Create a Mollie hosted-checkout payment session.
- * TODO: replace stub with real `POST https://api.mollie.com/v2/payments`.
+ * POST https://api.mollie.com/v2/payments
  */
 export async function createPayment(
   input: CreatePaymentInput,
 ): Promise<CreatePaymentResult> {
   const idempotencyKey = input.idempotencyKey ?? uuidv4();
-  void idempotencyKey; // forwarded as `Idempotency-Key` header in real impl
-  void config.mollie.apiKey;
+  const euros = (input.amountCents / 100).toFixed(2);
 
-  const molliePaymentId = "tr_" + uuidv4().replace(/-/g, "").slice(0, 10);
+  if (!config.mollie.apiKey) {
+    const molliePaymentId = "tr_" + uuidv4().replace(/-/g, "").slice(0, 10);
+    return {
+      molliePaymentId,
+      checkoutUrl: `https://www.mollie.com/checkout/${molliePaymentId}`,
+      status: "open",
+      expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+    };
+  }
+
+  const res = await fetch(`${MOLLIE_BASE}/payments`, {
+    method: "POST",
+    headers: {
+      "Authorization":   authHeader(),
+      "Content-Type":    "application/json",
+      "Idempotency-Key": idempotencyKey,
+    },
+    body: JSON.stringify({
+      amount:      { currency: "EUR", value: euros },
+      description: input.description,
+      redirectUrl: config.mollie.redirectUrl,
+      webhookUrl:  config.mollie.webhookUrl,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Mollie createPayment failed ${res.status}: ${err}`);
+  }
+
+  const data = await res.json() as {
+    id: string;
+    status: MollieStatus;
+    expiresAt?: string;
+    _links: { checkout: { href: string } };
+  };
+
   return {
-    molliePaymentId,
-    checkoutUrl: `https://www.mollie.com/checkout/${molliePaymentId}`,
-    status: MolliePaymentStatus.Open,
-    expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+    molliePaymentId: data.id,
+    checkoutUrl:     data._links.checkout.href,
+    status:          data.status,
+    expiresAt:       data.expiresAt ?? new Date(Date.now() + 15 * 60 * 1000).toISOString(),
   };
 }
 
 /**
  * Re-fetch a payment directly from Mollie to verify a webhook (anti-spoofing).
- * TODO: replace stub with real `GET https://api.mollie.com/v2/payments/{id}`.
+ * GET https://api.mollie.com/v2/payments/{id}
  */
 export async function getPayment(molliePaymentId: string): Promise<RemotePayment> {
+  if (!config.mollie.apiKey) {
+    return { id: molliePaymentId, status: "paid", amountCents: 0 };
+  }
+
+  const res = await fetch(`${MOLLIE_BASE}/payments/${molliePaymentId}`, {
+    headers: { "Authorization": authHeader() },
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Mollie getPayment failed ${res.status}: ${err}`);
+  }
+
+  const data = await res.json() as {
+    id: string;
+    status: MollieStatus;
+    amount: { value: string };
+  };
+
   return {
-    id: molliePaymentId,
-    status: MolliePaymentStatus.Paid,
-    amountCents: 0,
+    id:          data.id,
+    status:      data.status,
+    amountCents: Math.round(parseFloat(data.amount.value) * 100),
   };
 }
