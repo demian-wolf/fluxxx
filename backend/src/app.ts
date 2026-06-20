@@ -1,0 +1,40 @@
+import express, { Request, Response, NextFunction } from "express";
+import cors from "cors";
+import authRoutes from "./routes/auth";
+import agentRoutes from "./routes/agents";
+import transactionRoutes from "./routes/transactions";
+import tokenRoutes from "./routes/tokens";
+import paymentRoutes from "./routes/payments";
+import webhookRoutes from "./routes/webhooks";
+import walletRoutes from "./routes/wallets";
+
+export function createApp(): express.Express {
+  const app = express();
+  app.use(cors());
+  app.use(express.json());
+
+  app.get("/health", (_req, res) => {
+    res.json({ status: "ok", service: "flux-backend" });
+  });
+
+  app.use("/api/auth", authRoutes);
+  app.use("/api/agents", agentRoutes);
+  app.use("/api/transactions", transactionRoutes);
+  app.use("/api/tokens", tokenRoutes);
+  app.use("/api/payments", paymentRoutes);
+  app.use("/api/webhooks", webhookRoutes);
+  app.use("/api/wallets", walletRoutes);
+
+  app.use((_req, res) => {
+    res.status(404).json({ error: "not_found" });
+  });
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+    // eslint-disable-next-line no-console
+    console.error(err);
+    res.status(500).json({ error: "internal_server_error" });
+  });
+
+  return app;
+}
