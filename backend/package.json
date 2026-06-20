@@ -10,6 +10,7 @@
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "start": "node dist/index.js",
     "lint": "eslint \"src/**/*.ts\"",
+    "db:create": "ts-node --transpile-only src/db/createTables.ts",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio"
