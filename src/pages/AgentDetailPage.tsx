@@ -1,0 +1,237 @@
+import { useCallback, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { Ban, Pause, Play, Pencil } from "lucide-react";
+import { api } from "@/api";
+import { useToast } from "@/context/ToastContext";
+import { useAsync } from "@/hooks/useAsync";
+import { useLiveLedger } from "@/hooks/useLiveLedger";
+import { PageHeader } from "@/components/PageHeader";
+import { Card, CardBody, CardHeader } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { Tabs } from "@/components/ui/Tabs";
+import { AgentStatusBadge } from "@/components/ui/StatusBadge";
+import { ProgressBar, meterTone } from "@/components/ui/ProgressBar";
+import { LoadingState, ErrorState } from "@/components/ui/Spinner";
+import { SpendLineChart } from "@/components/charts/SpendLineChart";
+import { TransactionTable } from "@/components/domain/TransactionTable";
+import { formatCents, formatDateTime, pct, relativeTime } from "@/lib/utils";
+
+export function AgentDetailPage() {
+  const { id = "" } = useParams();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [tab, setTab] = useState("overview");
+  const [busy, setBusy] = useState(false);
+
+  const agent = useAsync(() => api.getAgent(id), [id]);
+  const analytics = useAsync(() => api.getAgentAnalytics(id), [id]);
+  const series = useAsync(() => api.getAgentSpendSeries(id), [id]);
+  const txns = useAsync(() => api.listTransactions({ agentIds: [id] }), [id]);
+  const policies = useAsync(() => api.listPolicies(id), [id]);
+  const wallets = useAsync(() => api.listWallets(), []);
+
+  const refreshLive = useCallback(() => {
+    agent.refresh();
+    analytics.refresh();
+    series.refresh();
+    txns.refresh();
+  }, [agent, analytics, series, txns]);
+  useLiveLedger(refreshLive);
+
+  const walletName = useMemo(
+    () =>
+      wallets.data?.find((w) => w.id === agent.data?.wallet_id)?.name ?? "—",
+    [wallets.data, agent.data],
+  );
+
+  if (agent.loading) return <LoadingState />;
+  if (agent.error || !agent.data)
+    return <ErrorState message={agent.error ?? "not found"} onRetry={agent.refresh} />;
+
+  const a = agent.data;
+  const hourlySpent = analytics.data?.spent_last_hour_cents ?? 0;
+  const dailySpent = analytics.data?.spent_today_cents ?? 0;
+  const hourlyPct = pct(hourlySpent, a.hourly_limit_cents);
+  const dailyPct = pct(dailySpent, a.daily_limit_cents);
+
+  const setStatus = async (status: typeof a.status) => {
+    setBusy(true);
+    try {
+      await api.setAgentStatus(id, status);
+      toast("success", `Agent ${status}`, a.name);
+      refreshLive();
+    } catch {
+      toast("error", "Action failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <PageHeader
+        title={a.name}
+        crumbs={[{ label: "Agents", to: "/agents" }, { label: a.name }]}
+        subtitle={
+          <span className="inline-flex flex-wrap items-center gap-2">
+            <AgentStatusBadge status={a.status} />
+            <span className="text-xs text-ink-muted">
+              Wallet: <span className="text-ink">{walletName}</span>
+            </span>
+            <span className="text-xs text-ink-muted">
+              Last seen:{" "}
+              <span className="text-ink">{relativeTime(a.last_seen_at)}</span>
+            </span>
+            <span className="font-mono text-xs text-ink-faint">
+              API key ••••{a.api_key_preview}
+            </span>
+          </span>
+        }
+        actions={
+          <>
+            <Button variant="ghost" onClick={() => navigate(`/agents/${id}/policy`)}>
+              <Pencil className="h-4 w-4" /> Edit Policy
+            </Button>
+            {a.status === "active" ? (
+              <Button variant="ghost" onClick={() => setStatus("suspended")} loading={busy}>
+                <Pause className="h-4 w-4" /> Suspend
+              </Button>
+            ) : a.status === "suspended" ? (
+              <Button variant="ghost" onClick={() => setStatus("active")} loading={busy}>
+                <Play className="h-4 w-4" /> Reactivate
+              </Button>
+            ) : null}
+            {a.status !== "revoked" && (
+              <Button variant="danger" onClick={() => setStatus("revoked")} loading={busy}>
+                <Ban className="h-4 w-4" /> Revoke
+              </Button>
+            )}
+          </>
+        }
+      />
+
+      <Tabs
+        tabs={[
+          { id: "overview", label: "Overview" },
+          { id: "transactions", label: "Transactions" },
+          { id: "policy", label: "Policy History" },
+        ]}
+        active={tab}
+        onChange={setTab}
+        className="mb-4"
+      />
+
+      {tab === "overview" && (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader title="Live spend meters" />
+            <CardBody className="space-y-5">
+              <Meter
+                label="Hourly burn rate"
+                spent={hourlySpent}
+                limit={a.hourly_limit_cents}
+                percent={hourlyPct}
+              />
+              <Meter
+                label="Daily spend"
+                spent={dailySpent}
+                limit={a.daily_limit_cents}
+                percent={dailyPct}
+              />
+              <div className="flex items-center justify-between rounded-lg border border-line bg-bg-raised/30 px-4 py-3">
+                <span className="text-sm text-ink-muted">Per transaction cap</span>
+                <span className="font-mono text-sm text-ink">
+                  {formatCents(a.per_tx_limit_cents)} max
+                </span>
+              </div>
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader title="Spend over last 24 hours" />
+            <CardBody>
+              {series.loading ? (
+                <LoadingState />
+              ) : (
+                <SpendLineChart
+                  data={series.data ?? []}
+                  limitCents={a.hourly_limit_cents}
+                  height={220}
+                />
+              )}
+            </CardBody>
+          </Card>
+        </div>
+      )}
+
+      {tab === "transactions" && (
+        <Card>
+          {txns.loading ? (
+            <LoadingState />
+          ) : (
+            <TransactionTable rows={txns.data ?? []} showAgent={false} />
+          )}
+        </Card>
+      )}
+
+      {tab === "policy" && (
+        <Card>
+          <CardHeader title="Policy version history" subtitle="Previous versions are archived, never deleted." />
+          {policies.loading ? (
+            <LoadingState />
+          ) : (
+            <ul className="divide-y divide-line">
+              {(policies.data ?? []).map((p) => (
+                <li key={p.id} className="flex items-start justify-between gap-4 px-4 py-3">
+                  <div>
+                    <p className="flex items-center gap-2 text-sm font-medium text-ink">
+                      Policy v{p.version}
+                      {p.is_active && (
+                        <span className="rounded-full bg-flux-green/15 px-2 py-0.5 text-xs text-flux-green">
+                          active
+                        </span>
+                      )}
+                    </p>
+                    <p className="mt-1 font-mono text-xs text-ink-muted">
+                      per-tx {formatCents(p.rules.per_tx_limit_cents)} · hourly{" "}
+                      {formatCents(p.rules.hourly_limit_cents)} · daily{" "}
+                      {formatCents(p.rules.daily_limit_cents)}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-xs text-ink-faint">
+                    {formatDateTime(p.created_at)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
+    </>
+  );
+}
+
+function Meter({
+  label,
+  spent,
+  limit,
+  percent,
+}: {
+  label: string;
+  spent: number;
+  limit: number;
+  percent: number;
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-ink-muted">{label}</span>
+        <span className="font-mono text-ink">
+          {formatCents(spent)} / {formatCents(limit)}{" "}
+          <span className="text-ink-faint">({percent}%)</span>
+        </span>
+      </div>
+      <ProgressBar percent={percent} tone={meterTone(percent)} className="mt-2" />
+    </div>
+  );
+}
