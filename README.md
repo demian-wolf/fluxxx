@@ -44,12 +44,15 @@ To point at a real backend, copy `.env.example` to `.env` and set:
 
 ```env
 VITE_USE_MOCK=false
-VITE_API_BASE_URL=https://your-flux-app.base44.app
+VITE_API_BASE_URL=http://localhost:3000
 ```
 
 Both backends implement the same `FluxApi` interface (`src/api/types.ts`), so
-screens never care which one is live. The HTTP client (`src/api/http.ts`) maps
-to the endpoints in `backend-architecture.md`.
+screens never care which one is live. The HTTP client (`src/api/http.ts`) is an
+adapter over the Express backend (`./backend`): it maps the backend's wire shapes
+(camelCase Drizzle rows + a few snake_case action payloads) into the frontend
+domain types, enriching responses with agent/wallet names and reconstructing the
+audit policy-check breakdown the UI expects.
 
 ## Route map
 
