@@ -44,9 +44,14 @@ export function DepositPage() {
         method,
       });
       toast("info", "Redirecting to Mollie", "Complete your payment to continue.");
-      // Full-page redirect to the hosted checkout (mock returns our own
-      // same-origin success page).
-      window.location.assign(res.checkout_url);
+      if (IS_MOCK) {
+        // The mock store lives in memory, so a full-page reload would discard
+        // the payment we just created. Navigate client-side instead.
+        const url = new URL(res.checkout_url);
+        navigate(`${url.pathname}${url.search}`);
+      } else {
+        window.location.assign(res.checkout_url);
+      }
     } catch {
       toast("error", "Could not start payment");
       setSubmitting(false);
