@@ -30,7 +30,7 @@ Other scripts:
 npm run build        # type-check + production build
 npm run preview      # serve the production build
 npm run lint         # eslint (zero-warning policy)
-npm run typecheck    # tsc --noEmit
+npm run typecheck    # tsc -b (type-check only)
 ```
 
 ## Demo mode vs. live backend
