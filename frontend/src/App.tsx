@@ -23,6 +23,9 @@ import { ApprovalPage } from "@/pages/ApprovalPage";
 import { WebhooksPage } from "@/pages/WebhooksPage";
 import { PluginsPage } from "@/pages/PluginsPage";
 import { CurrencyPage } from "@/pages/CurrencyPage";
+import { BillingPage } from "@/pages/BillingPage";
+import { ProvidersPage } from "@/pages/ProvidersPage";
+import { LicensingPage } from "@/pages/LicensingPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 
 function RootRedirect() {
@@ -58,6 +61,9 @@ export default function App() {
         <Route path="/webhooks" element={<WebhooksPage />} />
         <Route path="/plugins" element={<PluginsPage />} />
         <Route path="/currency" element={<CurrencyPage />} />
+        <Route path="/billing" element={<BillingPage />} />
+        <Route path="/providers" element={<ProvidersPage />} />
+        <Route path="/licensing" element={<LicensingPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
 

@@ -1,14 +1,19 @@
 import type {
   AgentIdentity,
   AgentWallet,
+  BillingAccount,
+  FeeEvent,
   GcEvent,
   LedgerEntry,
+  MarketplaceProvider,
   MolliePayment,
   OobKillEvent,
   PolicyCheck,
+  SaasPlan,
   SpendPolicy,
   TransactionRequest,
   User,
+  WhiteLabelLicense,
 } from "@/types";
 
 export function genId(prefix: string): string {
@@ -46,6 +51,10 @@ export interface MockState {
   payments: MolliePayment[];
   gcEvents: GcEvent[];
   oobKillEvents: OobKillEvent[];
+  billingAccount: BillingAccount;
+  feeEvents: FeeEvent[];
+  providers: MarketplaceProvider[];
+  licenses: WhiteLabelLicense[];
 }
 
 const OPERATOR_ID = "user_operator01";
@@ -459,6 +468,135 @@ export function createInitialState(): MockState {
     },
   ];
 
+  const billingAccount: BillingAccount = {
+    id: "bill_operator01",
+    user_id: OPERATOR_ID,
+    tier: "pro",
+    tx_fee_bps: 150,
+    current_period_start: hoursAgo(720),
+    current_period_end: new Date(now + 30 * 24 * 3_600_000).toISOString(),
+    monthly_volume_cents: 6715,
+    total_fees_collected_cents: 101,
+    total_transactions_billed: 4,
+    created_at: hoursAgo(720),
+  };
+
+  const feeEvents: FeeEvent[] = [
+    {
+      id: genId("fee"),
+      transaction_id: transactions[0].id,
+      agent_name: "ResearchBot v1",
+      gross_amount_cents: 5,
+      fee_bps: 150,
+      fee_cents: 1,
+      net_amount_cents: 4,
+      created_at: transactions[0].created_at,
+    },
+    {
+      id: genId("fee"),
+      transaction_id: transactions[1].id,
+      agent_name: "ResearchBot v1",
+      gross_amount_cents: 5,
+      fee_bps: 150,
+      fee_cents: 1,
+      net_amount_cents: 4,
+      created_at: transactions[1].created_at,
+    },
+    {
+      id: genId("fee"),
+      transaction_id: transactions[3].id,
+      agent_name: "CrawlerOps",
+      gross_amount_cents: 275,
+      fee_bps: 150,
+      fee_cents: 4,
+      net_amount_cents: 271,
+      created_at: transactions[3].created_at,
+    },
+  ];
+
+  const providers: MarketplaceProvider[] = [
+    {
+      id: genId("prov"),
+      name: "Dataset.io",
+      domain: "dataset.io",
+      status: "verified",
+      verification_fee_cents: 2500,
+      total_verifications: 847,
+      total_revenue_cents: 42350,
+      api_key_preview: "k9f2",
+      created_at: hoursAgo(500),
+    },
+    {
+      id: genId("prov"),
+      name: "ProxyMesh",
+      domain: "proxymesh.io",
+      status: "verified",
+      verification_fee_cents: 5000,
+      total_verifications: 312,
+      total_revenue_cents: 78000,
+      api_key_preview: "3m7x",
+      created_at: hoursAgo(400),
+    },
+    {
+      id: genId("prov"),
+      name: "ArXiv Premium",
+      domain: "arxiv.org",
+      status: "pending",
+      verification_fee_cents: 1000,
+      total_verifications: 0,
+      total_revenue_cents: 0,
+      api_key_preview: "a1b2",
+      created_at: hoursAgo(24),
+    },
+    {
+      id: genId("prov"),
+      name: "SerpAPI",
+      domain: "serpapi.com",
+      status: "verified",
+      verification_fee_cents: 3000,
+      total_verifications: 156,
+      total_revenue_cents: 23400,
+      api_key_preview: "s4p1",
+      created_at: hoursAgo(350),
+    },
+  ];
+
+  const licenses: WhiteLabelLicense[] = [
+    {
+      id: genId("lic"),
+      platform: "LangChain",
+      contact_email: "partnerships@langchain.dev",
+      status: "active",
+      monthly_fee_cents: 250000,
+      api_calls_this_month: 14820,
+      api_call_limit: 50000,
+      issued_at: hoursAgo(2160),
+      expires_at: new Date(now + 180 * 24 * 3_600_000).toISOString(),
+    },
+    {
+      id: genId("lic"),
+      platform: "CrewAI",
+      contact_email: "integrations@crewai.com",
+      status: "active",
+      monthly_fee_cents: 150000,
+      api_calls_this_month: 8340,
+      api_call_limit: 25000,
+      issued_at: hoursAgo(1440),
+      expires_at: new Date(now + 120 * 24 * 3_600_000).toISOString(),
+    },
+    {
+      id: genId("lic"),
+      platform: "AutoGen",
+      contact_email: "biz@autogen.dev",
+      status: "trial",
+      monthly_fee_cents: 0,
+      api_calls_this_month: 1205,
+      api_call_limit: 5000,
+      issued_at: hoursAgo(336),
+      expires_at: new Date(now + 14 * 24 * 3_600_000).toISOString(),
+    },
+  ];
+
   return {
     user,
     sessionToken: null,
@@ -470,8 +608,66 @@ export function createInitialState(): MockState {
     payments: [],
     gcEvents: [],
     oobKillEvents: [],
+    billingAccount,
+    feeEvents,
+    providers,
+    licenses,
   };
 }
+
+export const PLANS: SaasPlan[] = [
+  {
+    tier: "free",
+    label: "Free",
+    price_cents_monthly: 0,
+    tx_fee_bps: 300,
+    max_wallets: 2,
+    max_agents: 5,
+    max_monthly_volume_cents: 500000,
+    features: [
+      "2 wallets",
+      "5 agents",
+      "3% transaction fee",
+      "Community support",
+    ],
+  },
+  {
+    tier: "pro",
+    label: "Pro",
+    price_cents_monthly: 4900,
+    tx_fee_bps: 150,
+    max_wallets: 20,
+    max_agents: 100,
+    max_monthly_volume_cents: 10000000,
+    features: [
+      "20 wallets",
+      "100 agents",
+      "1.5% transaction fee",
+      "Priority support",
+      "Advanced analytics",
+      "Webhook integrations",
+    ],
+  },
+  {
+    tier: "enterprise",
+    label: "Enterprise",
+    price_cents_monthly: 49900,
+    tx_fee_bps: 100,
+    max_wallets: null,
+    max_agents: null,
+    max_monthly_volume_cents: null,
+    features: [
+      "Unlimited wallets",
+      "Unlimited agents",
+      "1% transaction fee",
+      "Dedicated support",
+      "Custom policy engine",
+      "SSO & audit logs",
+      "SLA guarantee",
+      "White-label option",
+    ],
+  },
+];
 
 export const SEED_PAYEES = [
   { url: "https://dataset.io/api/v1/datasets/climate/chunk/", desc: "Unlock climate dataset chunk #", category: "data" },

@@ -6,6 +6,9 @@ import {
   ReceiptText,
   Recycle,
   ShieldAlert,
+  CreditCard,
+  Store,
+  KeyRound,
   Settings,
   TrendingDown,
   Shield,
@@ -39,6 +42,9 @@ const items: NavItem[] = [
   { to: "/webhooks", label: "Webhooks", icon: Bell },
   { to: "/plugins", label: "Policy Plugins", icon: Puzzle },
   { to: "/currency", label: "Multi-Currency", icon: Coins },
+  { to: "/billing", label: "Billing & Fees", icon: CreditCard },
+  { to: "/providers", label: "Providers", icon: Store },
+  { to: "/licensing", label: "Licensing", icon: KeyRound },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 

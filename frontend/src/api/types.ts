@@ -6,24 +6,31 @@ import type {
   ApprovalQueueItem,
   ApprovalQueueStats,
   AuthResponse,
+  BillingAccount,
   ConversionResult,
   CreateDepositInput,
   CreateDepositResponse,
   CurrencyConfig,
   DepletionForecast,
   ExchangeRate,
+  FeeEvent,
   GcEvent,
   GcStatus,
   LedgerEntry,
+  LicensingStats,
+  MarketplaceProvider,
   MolliePayment,
   OobKillEvent,
   OobSimulateResult,
   OobStatus,
   PolicyPluginInfo,
   PolicyRules,
+  ProviderStats,
   RegisterAgentInput,
   RegisterAgentResponse,
   ReputationScore,
+  SaasPlan,
+  SaasTier,
   SpawnAgentInput,
   SpawnAgentResponse,
   SpendPoint,
@@ -34,6 +41,7 @@ import type {
   User,
   WalletAnalytics,
   WebhookConfig,
+  WhiteLabelLicense,
 } from "@/types";
 
 export interface LoginInput {
@@ -142,4 +150,19 @@ export interface FluxApi {
   listCurrencies(): Promise<CurrencyConfig[]>;
   getExchangeRates(): Promise<ExchangeRate[]>;
   convertCurrency(amountCents: number, from: SupportedCurrency, to: SupportedCurrency): Promise<ConversionResult>;
+
+  // billing & monetization
+  listPlans(): Promise<SaasPlan[]>;
+  getBillingAccount(): Promise<BillingAccount>;
+  changePlan(tier: SaasTier): Promise<BillingAccount>;
+  listFeeEvents(): Promise<FeeEvent[]>;
+
+  // provider marketplace
+  getProviderStats(): Promise<ProviderStats>;
+  listProviders(): Promise<MarketplaceProvider[]>;
+  verifyProvider(id: string): Promise<MarketplaceProvider>;
+
+  // white-label licensing
+  getLicensingStats(): Promise<LicensingStats>;
+  listLicenses(): Promise<WhiteLabelLicense[]>;
 }

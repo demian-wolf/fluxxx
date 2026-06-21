@@ -249,6 +249,87 @@ export interface SweepResult {
   events: GcEvent[];
 }
 
+// ----- Monetization / Billing -----
+
+export type SaasTier = "free" | "pro" | "enterprise";
+
+export interface SaasPlan {
+  tier: SaasTier;
+  label: string;
+  price_cents_monthly: number;
+  tx_fee_bps: number; // basis points (100 = 1%)
+  max_wallets: number | null; // null = unlimited
+  max_agents: number | null;
+  max_monthly_volume_cents: number | null;
+  features: string[];
+}
+
+export interface BillingAccount {
+  id: string;
+  user_id: string;
+  tier: SaasTier;
+  tx_fee_bps: number;
+  current_period_start: ISODateString;
+  current_period_end: ISODateString;
+  monthly_volume_cents: number;
+  total_fees_collected_cents: number;
+  total_transactions_billed: number;
+  created_at: ISODateString;
+}
+
+export interface FeeEvent {
+  id: string;
+  transaction_id: string;
+  agent_name: string;
+  gross_amount_cents: number;
+  fee_bps: number;
+  fee_cents: number;
+  net_amount_cents: number;
+  created_at: ISODateString;
+}
+
+export type ProviderStatus = "pending" | "verified" | "suspended";
+
+export interface MarketplaceProvider {
+  id: string;
+  name: string;
+  domain: string;
+  status: ProviderStatus;
+  verification_fee_cents: number;
+  total_verifications: number;
+  total_revenue_cents: number;
+  api_key_preview: string;
+  created_at: ISODateString;
+}
+
+export interface ProviderStats {
+  total_providers: number;
+  verified_providers: number;
+  total_verification_revenue_cents: number;
+  pending_verifications: number;
+}
+
+export type LicenseStatus = "active" | "expired" | "trial";
+
+export interface WhiteLabelLicense {
+  id: string;
+  platform: string;
+  contact_email: string;
+  status: LicenseStatus;
+  monthly_fee_cents: number;
+  api_calls_this_month: number;
+  api_call_limit: number | null;
+  issued_at: ISODateString;
+  expires_at: ISODateString;
+}
+
+export interface LicensingStats {
+  total_licenses: number;
+  active_licenses: number;
+  total_monthly_revenue_cents: number;
+  total_api_calls: number;
+}
+
 // ----- Out-of-Budget (OOB) Killer -----
 
 export interface OobKillEvent {
