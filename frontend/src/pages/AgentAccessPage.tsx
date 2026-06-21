@@ -42,7 +42,7 @@ export function AgentAccessPage() {
 
   useRefreshOnFocus(refresh);
 
-  const pending = requests.data ?? [];
+  const pending = useMemo(() => requests.data ?? [], [requests.data]);
   const stats = useMemo(() => {
     const walletCount = new Set(pending.map((request) => request.walletId)).size;
     const requestedDaily = pending.reduce(
