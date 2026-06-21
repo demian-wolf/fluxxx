@@ -11,7 +11,6 @@ export const molliePaymentsTable = pgTable("mollie_payments", {
   walletId:          uuid("wallet_id").notNull().references(() => agentWalletsTable.id),
   molliePaymentId:   text("mollie_payment_id").notNull().unique(),
   amountCents:       integer("amount_cents").notNull(),
-  currency:          text("currency").notNull().default("EUR"),
   method:            text("method"),
   status:            molliePaymentStatusEnum("status").notNull().default("open"),
   checkoutUrl:       text("checkout_url").notNull(),

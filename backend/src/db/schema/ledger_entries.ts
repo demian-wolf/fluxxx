@@ -3,7 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { agentWalletsTable } from "./agent_wallets";
 import { agentIdentitiesTable } from "./agent_identities";
 
-export const ledgerEntryTypeEnum   = pgEnum("ledger_entry_type",   ["deposit", "spend", "refund", "hold", "release"]);
+export const ledgerEntryTypeEnum   = pgEnum("ledger_entry_type",   ["deposit", "spend", "fee", "refund", "hold", "release"]);
 export const ledgerEntryStatusEnum = pgEnum("ledger_entry_status", ["pending", "settled", "failed", "reversed"]);
 
 export const ledgerEntriesTable = pgTable("ledger_entries", {

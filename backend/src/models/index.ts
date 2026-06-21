@@ -6,7 +6,6 @@
  */
 import {
   UUID,
-  Currency,
   WalletStatus,
   AgentStatus,
   LedgerEntryType,
@@ -33,7 +32,6 @@ export interface AgentWallet {
   name: string;
   /** Cached projection of the append-only ledger; never edited directly. */
   balance_cents: number;
-  currency: Currency;
   status: WalletStatus;
   created_at: string;
   updated_at: string;
@@ -93,7 +91,6 @@ export interface MolliePayment {
   wallet_id: UUID;
   mollie_payment_id: string;
   amount_cents: number;
-  currency: Currency;
   method: string;
   status: MolliePaymentStatus;
   checkout_url: string;

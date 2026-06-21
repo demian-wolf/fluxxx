@@ -5,8 +5,6 @@
 
 export type UUID = string;
 
-export type Currency = "EUR";
-
 export enum WalletStatus {
   Active = "active",
   Suspended = "suspended",
