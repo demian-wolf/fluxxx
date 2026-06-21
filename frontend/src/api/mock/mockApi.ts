@@ -22,11 +22,14 @@ import type {
   CreateDepositResponse,
   CurrencyConfig,
   DepletionForecast,
+  DevinSession,
+  DevinSessionStats,
   ExchangeRate,
   FeeEvent,
   GcEvent,
   GcReason,
   GcStatus,
+  LaunchDevinInput,
   LedgerEntry,
   LicensingStats,
   MarketplaceProvider,
@@ -1376,6 +1379,96 @@ export const mockApi: FluxApi = {
   async listLicenses(): Promise<WhiteLabelLicense[]> {
     await sleep(180);
     return structuredClone(state.licenses);
+  },
+
+  // ---- Devin integration -----------------------------------------------------
+
+  async listDevinSessions(): Promise<DevinSession[]> {
+    await sleep(200);
+    return structuredClone(state.devinSessions).sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
+  },
+
+  async getDevinSessionStats(): Promise<DevinSessionStats> {
+    await sleep(120);
+    const sessions = state.devinSessions;
+    return {
+      total_sessions: sessions.length,
+      active_sessions: sessions.filter((s) => s.status === "running" || s.status === "provisioning").length,
+      total_spent_cents: sessions.reduce((sum, s) => sum + s.total_spent_cents, 0),
+      total_transactions: sessions.reduce((sum, s) => sum + s.transactions_approved, 0),
+      total_rejections: sessions.reduce((sum, s) => sum + s.transactions_rejected, 0),
+    };
+  },
+
+  async launchDevinSession(input: LaunchDevinInput): Promise<DevinSession> {
+    await sleep(800);
+    const wallet = requireWallet(input.wallet_id);
+    const agentName = input.agent_name ?? "Devin Agent";
+    const sessionId = genId("devin");
+    const fakeDevinId = Math.random().toString(16).slice(2, 14);
+
+    const agent: AgentIdentity = {
+      id: genId("agent"),
+      wallet_id: wallet.id,
+      owner_id: state.user.id,
+      parent_id: null,
+      name: `Devin — ${agentName}`,
+      api_key_preview: Math.random().toString(16).slice(2, 6),
+      status: "active",
+      hourly_limit_cents: input.hourly_limit_cents,
+      per_tx_limit_cents: input.per_tx_limit_cents,
+      daily_limit_cents: input.daily_limit_cents,
+      allowed_domains: input.allowed_domains ?? [],
+      blocked_domains: [],
+      created_at: new Date().toISOString(),
+      last_seen_at: new Date().toISOString(),
+    };
+    state.agents.push(agent);
+
+    const session: DevinSession = {
+      id: sessionId,
+      devin_session_id: fakeDevinId,
+      devin_session_url: `https://app.devin.ai/sessions/${fakeDevinId}`,
+      agent_id: agent.id,
+      agent_name: agent.name,
+      wallet_id: wallet.id,
+      wallet_name: wallet.name,
+      task: input.task,
+      status: "running",
+      total_spent_cents: 0,
+      transactions_approved: 0,
+      transactions_rejected: 0,
+      last_rejection_reason: null,
+      per_tx_limit_cents: input.per_tx_limit_cents,
+      hourly_limit_cents: input.hourly_limit_cents,
+      daily_limit_cents: input.daily_limit_cents,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    state.devinSessions.push(session);
+    emit();
+    return structuredClone(session);
+  },
+
+  async escalateDevinSession(sessionId: string, newLimitCents: number, limitField: string): Promise<DevinSession> {
+    await sleep(400);
+    const session = state.devinSessions.find((s) => s.id === sessionId);
+    if (!session) throw new ApiError(404, "session_not_found");
+    if (limitField === "per_tx_limit_cents") session.per_tx_limit_cents = newLimitCents;
+    else if (limitField === "hourly_limit_cents") session.hourly_limit_cents = newLimitCents;
+    else if (limitField === "daily_limit_cents") session.daily_limit_cents = newLimitCents;
+    const agent = state.agents.find((a) => a.id === session.agent_id);
+    if (agent) {
+      if (limitField === "per_tx_limit_cents") agent.per_tx_limit_cents = newLimitCents;
+      else if (limitField === "hourly_limit_cents") agent.hourly_limit_cents = newLimitCents;
+      else if (limitField === "daily_limit_cents") agent.daily_limit_cents = newLimitCents;
+    }
+    session.last_rejection_reason = null;
+    session.updated_at = new Date().toISOString();
+    emit();
+    return structuredClone(session);
   },
 };
 

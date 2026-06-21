@@ -14,10 +14,13 @@ import type {
   CreateDepositResponse,
   CurrencyConfig,
   DepletionForecast,
+  DevinSession,
+  DevinSessionStats,
   ExchangeRate,
   FeeEvent,
   GcEvent,
   GcStatus,
+  LaunchDevinInput,
   LedgerEntry,
   LicensingStats,
   MarketplaceProvider,
@@ -172,4 +175,10 @@ export interface FluxApi {
   // white-label licensing
   getLicensingStats(): Promise<LicensingStats>;
   listLicenses(): Promise<WhiteLabelLicense[]>;
+
+  // Devin integration
+  listDevinSessions(): Promise<DevinSession[]>;
+  getDevinSessionStats(): Promise<DevinSessionStats>;
+  launchDevinSession(input: LaunchDevinInput): Promise<DevinSession>;
+  escalateDevinSession(sessionId: string, newLimitCents: number, limitField: string): Promise<DevinSession>;
 }

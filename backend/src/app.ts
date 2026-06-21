@@ -16,6 +16,7 @@ import alertRoutes from "./routes/alerts";
 import approvalRoutes from "./routes/approval";
 import pluginRoutes from "./routes/plugins";
 import currencyRoutes from "./routes/currency";
+import devinRoutes from "./routes/devin";
 
 export function createApp(): express.Express {
   const app = express();
@@ -43,6 +44,7 @@ export function createApp(): express.Express {
   app.use("/api/approval", approvalRoutes);
   app.use("/api/plugins", pluginRoutes);
   app.use("/api/currency", currencyRoutes);
+  app.use("/api/devin", devinRoutes);
 
   app.use((_req, res) => {
     res.status(404).json({ error: "not_found" });
