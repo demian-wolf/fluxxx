@@ -284,3 +284,152 @@ export interface OobSimulateResult {
   killed_agent_names: string[];
   event: OobKillEvent | null;
 }
+
+// ----- Budget Forecasting -----
+
+export interface BurnRate {
+  centsPerHour: number;
+  centsPerDay: number;
+  windowHours: number;
+}
+
+export interface AgentBurnRate {
+  agentId: string;
+  agentName: string;
+  centsPerHour: number;
+  percentOfTotal: number;
+}
+
+export interface DepletionForecast {
+  walletId: string;
+  balanceCents: number;
+  burnRate: BurnRate;
+  depletesAt: ISODateString | null;
+  hoursRemaining: number | null;
+  oobThresholdCents: number;
+  hitsOobAt: ISODateString | null;
+  hoursUntilOob: number | null;
+  confidence: "high" | "medium" | "low";
+  agentBurnRates: AgentBurnRate[];
+}
+
+// ----- Agent Reputation -----
+
+export type ReputationGrade = "A" | "B" | "C" | "D" | "F";
+export type ReputationTrend = "improving" | "stable" | "declining";
+
+export interface ReputationBreakdown {
+  approvalRate: number;
+  approvalRateScore: number;
+  complianceScore: number;
+  activityScore: number;
+  incidentScore: number;
+  totalTransactions: number;
+  rejectedTransactions: number;
+  oobKills: number;
+  gcReclamations: number;
+}
+
+export interface ReputationScore {
+  agentId: string;
+  agentName: string;
+  score: number;
+  grade: ReputationGrade;
+  breakdown: ReputationBreakdown;
+  trend: ReputationTrend;
+  lastUpdated: ISODateString;
+}
+
+// ----- Webhook / Alerts -----
+
+export type AlertEventType =
+  | "oob_kill"
+  | "gc_sweep"
+  | "policy_violation"
+  | "low_balance"
+  | "agent_spawned"
+  | "high_value_approval"
+  | "agent_revoked"
+  | "approval_required";
+
+export interface WebhookConfig {
+  id: string;
+  url: string;
+  secret: string;
+  events: AlertEventType[];
+  enabled: boolean;
+  createdAt: ISODateString;
+}
+
+export interface AlertDelivery {
+  eventType: AlertEventType;
+  webhookId: string;
+  status: "delivered" | "failed" | "pending";
+  statusCode?: number;
+  attemptedAt: ISODateString;
+  error?: string;
+}
+
+// ----- Approval Queue -----
+
+export interface ApprovalQueueItem {
+  id: string;
+  agentId: string;
+  agentName: string;
+  walletId: string;
+  walletName: string;
+  requestedAmountCents: number;
+  payeeUrl: string;
+  description: string;
+  status: "pending_approval" | "approved" | "rejected";
+  createdAt: ISODateString;
+  resolvedAt: ISODateString | null;
+  resolvedBy: string | null;
+}
+
+export interface ApprovalQueueStats {
+  pendingCount: number;
+  approvedToday: number;
+  rejectedToday: number;
+  totalValue: number;
+}
+
+// ----- Policy Plugins -----
+
+export interface PolicyPluginInfo {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  priority: number;
+  config: Record<string, unknown>;
+}
+
+// ----- Multi-Currency -----
+
+export type SupportedCurrency = "EUR" | "USD" | "GBP" | "USDC";
+
+export interface CurrencyConfig {
+  code: SupportedCurrency;
+  name: string;
+  symbol: string;
+  decimals: number;
+  minTransactionCents: number;
+  supported: boolean;
+}
+
+export interface ExchangeRate {
+  from: SupportedCurrency;
+  to: SupportedCurrency;
+  rate: number;
+  updatedAt: ISODateString;
+}
+
+export interface ConversionResult {
+  fromCurrency: SupportedCurrency;
+  toCurrency: SupportedCurrency;
+  fromAmountCents: number;
+  toAmountCents: number;
+  rate: number;
+  rateTimestamp: ISODateString;
+}

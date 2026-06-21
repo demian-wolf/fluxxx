@@ -9,6 +9,12 @@ import webhookRoutes from "./routes/webhooks";
 import walletRoutes from "./routes/wallets";
 import gcRoutes from "./routes/gc";
 import oobRoutes from "./routes/oob";
+import forecastingRoutes from "./routes/forecasting";
+import reputationRoutes from "./routes/reputation";
+import alertRoutes from "./routes/alerts";
+import approvalRoutes from "./routes/approval";
+import pluginRoutes from "./routes/plugins";
+import currencyRoutes from "./routes/currency";
 
 export function createApp(): express.Express {
   const app = express();
@@ -28,6 +34,12 @@ export function createApp(): express.Express {
   app.use("/api/wallets", walletRoutes);
   app.use("/api/gc", gcRoutes);
   app.use("/api/oob", oobRoutes);
+  app.use("/api/forecasting", forecastingRoutes);
+  app.use("/api/reputation", reputationRoutes);
+  app.use("/api/alerts", alertRoutes);
+  app.use("/api/approval", approvalRoutes);
+  app.use("/api/plugins", pluginRoutes);
+  app.use("/api/currency", currencyRoutes);
 
   app.use((_req, res) => {
     res.status(404).json({ error: "not_found" });

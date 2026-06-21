@@ -1,9 +1,17 @@
 import type {
   AgentIdentity,
   AgentWallet,
+  AlertDelivery,
+  AlertEventType,
+  ApprovalQueueItem,
+  ApprovalQueueStats,
   AuthResponse,
+  ConversionResult,
   CreateDepositInput,
   CreateDepositResponse,
+  CurrencyConfig,
+  DepletionForecast,
+  ExchangeRate,
   GcEvent,
   GcStatus,
   LedgerEntry,
@@ -11,17 +19,21 @@ import type {
   OobKillEvent,
   OobSimulateResult,
   OobStatus,
+  PolicyPluginInfo,
   PolicyRules,
   RegisterAgentInput,
   RegisterAgentResponse,
+  ReputationScore,
   SpawnAgentInput,
   SpawnAgentResponse,
   SpendPoint,
   SpendPolicy,
+  SupportedCurrency,
   SweepResult,
   TransactionRequest,
   User,
   WalletAnalytics,
+  WebhookConfig,
 } from "@/types";
 
 export interface LoginInput {
@@ -101,4 +113,33 @@ export interface FluxApi {
   getOobStatus(): Promise<OobStatus>;
   listOobEvents(): Promise<OobKillEvent[]>;
   simulateOobKill(walletId: string, thresholdCents?: number): Promise<OobSimulateResult>;
+
+  // Budget Forecasting
+  getForecast(walletId: string, windowHours?: number): Promise<DepletionForecast>;
+
+  // Agent Reputation
+  getReputation(agentId: string): Promise<ReputationScore>;
+  getAllReputations(): Promise<ReputationScore[]>;
+
+  // Webhook / Alerts
+  listWebhooks(): Promise<WebhookConfig[]>;
+  createWebhook(url: string, events: AlertEventType[], secret?: string): Promise<WebhookConfig>;
+  deleteWebhook(id: string): Promise<void>;
+  getDeliveryLog(limit?: number): Promise<AlertDelivery[]>;
+
+  // Approval Queue
+  getApprovalStats(): Promise<ApprovalQueueStats>;
+  listPendingApprovals(): Promise<ApprovalQueueItem[]>;
+  approveTransaction(transactionId: string): Promise<{ paymentToken: string; balanceAfterCents: number }>;
+  rejectTransaction(transactionId: string, reason?: string): Promise<void>;
+
+  // Policy Plugins
+  listPlugins(): Promise<PolicyPluginInfo[]>;
+  togglePlugin(pluginId: string, enabled: boolean): Promise<PolicyPluginInfo>;
+  updatePluginConfig(pluginId: string, config: Record<string, unknown>): Promise<PolicyPluginInfo>;
+
+  // Multi-Currency
+  listCurrencies(): Promise<CurrencyConfig[]>;
+  getExchangeRates(): Promise<ExchangeRate[]>;
+  convertCurrency(amountCents: number, from: SupportedCurrency, to: SupportedCurrency): Promise<ConversionResult>;
 }

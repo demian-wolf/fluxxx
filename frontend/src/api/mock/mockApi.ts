@@ -9,9 +9,17 @@ import type {
   AgentAnalytics,
   AgentIdentity,
   AgentWallet,
+  AlertDelivery,
+  AlertEventType,
+  ApprovalQueueItem,
+  ApprovalQueueStats,
   AuthResponse,
+  ConversionResult,
   CreateDepositInput,
   CreateDepositResponse,
+  CurrencyConfig,
+  DepletionForecast,
+  ExchangeRate,
   GcEvent,
   GcReason,
   GcStatus,
@@ -21,17 +29,21 @@ import type {
   OobSimulateResult,
   OobStatus,
   PolicyCheck,
+  PolicyPluginInfo,
   PolicyRules,
   RegisterAgentInput,
   RegisterAgentResponse,
+  ReputationScore,
   SpawnAgentInput,
   SpawnAgentResponse,
   SpendPoint,
   SpendPolicy,
+  SupportedCurrency,
   SweepResult,
   TransactionRequest,
   User,
   WalletAnalytics,
+  WebhookConfig,
 } from "@/types";
 import { sleep } from "@/lib/utils";
 import {
@@ -1048,4 +1060,212 @@ export const mockApi: FluxApi = {
     await sleep(400);
     return structuredClone(runOobCheck(walletId, thresholdCents));
   },
+
+  // ---- Budget Forecasting ----
+
+  async getForecast(walletId: string, _windowHours?: number): Promise<DepletionForecast> {
+    await sleep(200);
+    const wallet = state.wallets.find((w) => w.id === walletId);
+    if (!wallet) throw new Error("wallet_not_found");
+    const spendEntries = state.ledger.filter((e) => e.wallet_id === walletId && e.type === "spend");
+    const hourMs = 3_600_000;
+    const recentSpend = spendEntries
+      .filter((e) => Date.now() - new Date(e.created_at).getTime() < 24 * hourMs)
+      .reduce((s, e) => s + e.amount_cents, 0);
+    const centsPerHour = recentSpend / 24;
+    const centsPerDay = centsPerHour * 24;
+    const hoursRemaining = centsPerHour > 0 ? wallet.balance_cents / centsPerHour : null;
+    const hoursUntilOob = centsPerHour > 0 ? Math.max(0, (wallet.balance_cents - 500) / centsPerHour) : null;
+    const agentBurnRates = state.agents
+      .filter((a) => a.wallet_id === walletId && a.status === "active")
+      .map((a) => {
+        const agentSpend = spendEntries
+          .filter((e) => e.agent_id === a.id && Date.now() - new Date(e.created_at).getTime() < 24 * hourMs)
+          .reduce((s, e) => s + e.amount_cents, 0);
+        return {
+          agentId: a.id,
+          agentName: a.name,
+          centsPerHour: agentSpend / 24,
+          percentOfTotal: recentSpend > 0 ? (agentSpend / recentSpend) * 100 : 0,
+        };
+      })
+      .sort((a, b) => b.centsPerHour - a.centsPerHour);
+
+    return {
+      walletId,
+      balanceCents: wallet.balance_cents,
+      burnRate: { centsPerHour, centsPerDay, windowHours: 24 },
+      depletesAt: hoursRemaining ? new Date(Date.now() + hoursRemaining * hourMs).toISOString() : null,
+      hoursRemaining,
+      oobThresholdCents: 500,
+      hitsOobAt: hoursUntilOob != null ? new Date(Date.now() + hoursUntilOob * hourMs).toISOString() : null,
+      hoursUntilOob,
+      confidence: recentSpend > 50 ? "high" : recentSpend > 10 ? "medium" : "low",
+      agentBurnRates,
+    };
+  },
+
+  // ---- Agent Reputation ----
+
+  async getReputation(agentId: string): Promise<ReputationScore> {
+    await sleep(150);
+    const agent = state.agents.find((a) => a.id === agentId);
+    if (!agent) throw new Error("agent_not_found");
+    const txns = state.transactions.filter((t) => t.agent_id === agentId);
+    const rejected = txns.filter((t) => t.decision === "rejected").length;
+    const total = txns.length;
+    const approvalRate = total > 0 ? ((total - rejected) / total) * 100 : 100;
+    const oobKills = state.oobKillEvents.filter((e) => e.killed_agent_ids.includes(agentId)).length;
+    const gcReclamations = state.gcEvents.filter((e) => e.agent_id === agentId).length;
+    const incidentPenalty = oobKills * 25 + gcReclamations * 15;
+    const score = Math.round(Math.min(100, approvalRate * 1.1) * 0.35 + Math.max(0, 100 - rejected * 5) * 0.25 + 85 * 0.20 + Math.max(0, 100 - incidentPenalty) * 0.20);
+    const grade = score >= 90 ? "A" : score >= 75 ? "B" : score >= 60 ? "C" : score >= 40 ? "D" : "F";
+    return {
+      agentId, agentName: agent.name, score, grade,
+      breakdown: { approvalRate, approvalRateScore: Math.min(100, approvalRate * 1.1), complianceScore: Math.max(0, 100 - rejected * 5), activityScore: 85, incidentScore: Math.max(0, 100 - incidentPenalty), totalTransactions: total, rejectedTransactions: rejected, oobKills, gcReclamations },
+      trend: "stable", lastUpdated: new Date().toISOString(),
+    };
+  },
+
+  async getAllReputations(): Promise<ReputationScore[]> {
+    await sleep(250);
+    const results: ReputationScore[] = [];
+    for (const agent of state.agents) {
+      results.push(await this.getReputation(agent.id));
+    }
+    return results.sort((a, b) => b.score - a.score);
+  },
+
+  // ---- Webhook / Alerts ----
+
+  async listWebhooks(): Promise<WebhookConfig[]> {
+    await sleep(100);
+    return mockWebhooks.slice();
+  },
+
+  async createWebhook(url: string, events: AlertEventType[], secret?: string): Promise<WebhookConfig> {
+    await sleep(200);
+    const wh: WebhookConfig = {
+      id: genId("whk"),
+      url,
+      secret: secret ?? "",
+      events,
+      enabled: true,
+      createdAt: new Date().toISOString(),
+    };
+    mockWebhooks.push(wh);
+    return wh;
+  },
+
+  async deleteWebhook(id: string): Promise<void> {
+    await sleep(150);
+    const idx = mockWebhooks.findIndex((w) => w.id === id);
+    if (idx >= 0) mockWebhooks.splice(idx, 1);
+  },
+
+  async getDeliveryLog(_limit?: number): Promise<AlertDelivery[]> {
+    await sleep(100);
+    return mockDeliveries.slice();
+  },
+
+  // ---- Approval Queue ----
+
+  async getApprovalStats(): Promise<ApprovalQueueStats> {
+    await sleep(100);
+    return { pendingCount: mockApprovalQueue.length, approvedToday: 3, rejectedToday: 1, totalValue: mockApprovalQueue.reduce((s, i) => s + i.requestedAmountCents, 0) };
+  },
+
+  async listPendingApprovals(): Promise<ApprovalQueueItem[]> {
+    await sleep(150);
+    return mockApprovalQueue.slice();
+  },
+
+  async approveTransaction(transactionId: string): Promise<{ paymentToken: string; balanceAfterCents: number }> {
+    await sleep(300);
+    const idx = mockApprovalQueue.findIndex((i) => i.id === transactionId);
+    if (idx >= 0) mockApprovalQueue.splice(idx, 1);
+    return { paymentToken: genToken(), balanceAfterCents: 1500 };
+  },
+
+  async rejectTransaction(transactionId: string, _reason?: string): Promise<void> {
+    await sleep(200);
+    const idx = mockApprovalQueue.findIndex((i) => i.id === transactionId);
+    if (idx >= 0) mockApprovalQueue.splice(idx, 1);
+  },
+
+  // ---- Policy Plugins ----
+
+  async listPlugins(): Promise<PolicyPluginInfo[]> {
+    await sleep(100);
+    return mockPlugins.slice();
+  },
+
+  async togglePlugin(pluginId: string, enabled: boolean): Promise<PolicyPluginInfo> {
+    await sleep(150);
+    const p = mockPlugins.find((pl) => pl.id === pluginId);
+    if (!p) throw new Error("plugin_not_found");
+    p.enabled = enabled;
+    return { ...p };
+  },
+
+  async updatePluginConfig(pluginId: string, config: Record<string, unknown>): Promise<PolicyPluginInfo> {
+    await sleep(150);
+    const p = mockPlugins.find((pl) => pl.id === pluginId);
+    if (!p) throw new Error("plugin_not_found");
+    p.config = { ...p.config, ...config };
+    return { ...p };
+  },
+
+  // ---- Multi-Currency ----
+
+  async listCurrencies(): Promise<CurrencyConfig[]> {
+    await sleep(80);
+    return [
+      { code: "EUR", name: "Euro", symbol: "\u20AC", decimals: 2, minTransactionCents: 1, supported: true },
+      { code: "USD", name: "US Dollar", symbol: "$", decimals: 2, minTransactionCents: 1, supported: true },
+      { code: "GBP", name: "British Pound", symbol: "\u00A3", decimals: 2, minTransactionCents: 1, supported: true },
+      { code: "USDC", name: "USD Coin", symbol: "USDC", decimals: 2, minTransactionCents: 1, supported: false },
+    ];
+  },
+
+  async getExchangeRates(): Promise<ExchangeRate[]> {
+    await sleep(100);
+    const now = new Date().toISOString();
+    return [
+      { from: "EUR", to: "USD", rate: 1.09, updatedAt: now },
+      { from: "EUR", to: "GBP", rate: 0.86, updatedAt: now },
+      { from: "USD", to: "EUR", rate: 0.92, updatedAt: now },
+      { from: "GBP", to: "EUR", rate: 1.16, updatedAt: now },
+    ];
+  },
+
+  async convertCurrency(amountCents: number, from: SupportedCurrency, to: SupportedCurrency): Promise<ConversionResult> {
+    await sleep(120);
+    const rates: Record<string, number> = { "EUR:USD": 1.09, "EUR:GBP": 0.86, "USD:EUR": 0.92, "GBP:EUR": 1.16, "USD:GBP": 0.79, "GBP:USD": 1.27 };
+    const rate = from === to ? 1 : (rates[`${from}:${to}`] ?? 1);
+    return { fromCurrency: from, toCurrency: to, fromAmountCents: amountCents, toAmountCents: Math.round(amountCents * rate), rate, rateTimestamp: new Date().toISOString() };
+  },
 };
+
+// ---- Mock data for new features ----
+
+const mockWebhooks: WebhookConfig[] = [
+  { id: "whk_demo1", url: "https://hooks.slack.com/services/T00/B00/xxx", secret: "whsec_demo", events: ["oob_kill", "low_balance"], enabled: true, createdAt: new Date(Date.now() - 48 * 3_600_000).toISOString() },
+];
+
+const mockDeliveries: AlertDelivery[] = [
+  { eventType: "oob_kill", webhookId: "whk_demo1", status: "delivered", statusCode: 200, attemptedAt: new Date(Date.now() - 2 * 3_600_000).toISOString() },
+  { eventType: "low_balance", webhookId: "whk_demo1", status: "delivered", statusCode: 200, attemptedAt: new Date(Date.now() - 4 * 3_600_000).toISOString() },
+];
+
+const mockApprovalQueue: ApprovalQueueItem[] = [
+  { id: "txn_approval1", agentId: "agent_researchbot1", agentName: "ResearchBot v1", walletId: "wallet_research01", walletName: "ResearchBot Budget", requestedAmountCents: 750, payeeUrl: "https://premium-data.io/api/v2/datasets/full", description: "Full premium dataset access license", status: "pending_approval", createdAt: new Date(Date.now() - 300_000).toISOString(), resolvedAt: null, resolvedBy: null },
+  { id: "txn_approval2", agentId: "agent_dataminer2", agentName: "DataMiner", walletId: "wallet_research01", walletName: "ResearchBot Budget", requestedAmountCents: 1200, payeeUrl: "https://compute-market.io/gpu/a100/1hr", description: "A100 GPU hour for embedding generation", status: "pending_approval", createdAt: new Date(Date.now() - 120_000).toISOString(), resolvedAt: null, resolvedBy: null },
+];
+
+const mockPlugins: PolicyPluginInfo[] = [
+  { id: "time_restriction", name: "Business Hours Restriction", description: "Block agent spend outside configured business hours (UTC)", enabled: false, priority: 10, config: { startHour: 8, endHour: 22 } },
+  { id: "anomaly_detector", name: "Spend Anomaly Detector", description: "Flag transactions with z-score > 3 compared to recent average", enabled: true, priority: 20, config: {} },
+  { id: "category_budget", name: "Category Budget Limits", description: "Enforce per-category daily spend limits", enabled: false, priority: 30, config: { limits: { data: 500, compute: 1000, api_access: 300 } } },
+  { id: "velocity_limit", name: "Transaction Velocity Limit", description: "Block agent if transaction count exceeds threshold in time window", enabled: true, priority: 40, config: { maxTxPerWindow: 50, windowMinutes: 5 } },
+];

@@ -17,6 +17,12 @@ import { TransactionDetailPage } from "@/pages/TransactionDetailPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { GcPage } from "@/pages/GcPage";
 import { OobPage } from "@/pages/OobPage";
+import { ForecastPage } from "@/pages/ForecastPage";
+import { ReputationPage } from "@/pages/ReputationPage";
+import { ApprovalPage } from "@/pages/ApprovalPage";
+import { WebhooksPage } from "@/pages/WebhooksPage";
+import { PluginsPage } from "@/pages/PluginsPage";
+import { CurrencyPage } from "@/pages/CurrencyPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 
 function RootRedirect() {
@@ -46,6 +52,12 @@ export default function App() {
         <Route path="/transactions/:id" element={<TransactionDetailPage />} />
         <Route path="/gc" element={<GcPage />} />
         <Route path="/oob" element={<OobPage />} />
+        <Route path="/forecast" element={<ForecastPage />} />
+        <Route path="/reputation" element={<ReputationPage />} />
+        <Route path="/approval" element={<ApprovalPage />} />
+        <Route path="/webhooks" element={<WebhooksPage />} />
+        <Route path="/plugins" element={<PluginsPage />} />
+        <Route path="/currency" element={<CurrencyPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
 

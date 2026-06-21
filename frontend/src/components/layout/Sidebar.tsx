@@ -7,6 +7,12 @@ import {
   Recycle,
   ShieldAlert,
   Settings,
+  TrendingDown,
+  Shield,
+  Bell,
+  CheckCircle,
+  Puzzle,
+  Coins,
   type LucideIcon,
 } from "lucide-react";
 import { Wordmark } from "@/components/Logo";
@@ -27,6 +33,12 @@ const items: NavItem[] = [
   { to: "/transactions", label: "Transactions", icon: ReceiptText },
   { to: "/gc", label: "Capital Reclamation", icon: Recycle },
   { to: "/oob", label: "OOB Killer", icon: ShieldAlert },
+  { to: "/forecast", label: "Forecasting", icon: TrendingDown },
+  { to: "/reputation", label: "Reputation", icon: Shield },
+  { to: "/approval", label: "Approval Queue", icon: CheckCircle },
+  { to: "/webhooks", label: "Webhooks", icon: Bell },
+  { to: "/plugins", label: "Policy Plugins", icon: Puzzle },
+  { to: "/currency", label: "Multi-Currency", icon: Coins },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 
