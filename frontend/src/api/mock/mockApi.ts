@@ -18,6 +18,8 @@ import type {
   PolicyRules,
   RegisterAgentInput,
   RegisterAgentResponse,
+  SpawnAgentInput,
+  SpawnAgentResponse,
   SpendPoint,
   SpendPolicy,
   TransactionRequest,
@@ -501,6 +503,88 @@ export const mockApi: FluxApi = {
     return {
       agent: structuredClone(agent),
       api_key: apiKey,
+      warning: "Store this key securely. It will not be shown again.",
+    };
+  },
+
+  async spawnAgent(parentId: string, input: SpawnAgentInput): Promise<SpawnAgentResponse> {
+    await sleep(400);
+    const parent = requireAgent(parentId);
+    if (parent.status !== "active") {
+      throw new Error("parent_not_active");
+    }
+
+    // Check can_spawn policy flag
+    const parentPolicy = state.policies.find(
+      (p) => p.agent_id === parentId && p.is_active,
+    );
+    if (parentPolicy?.rules.can_spawn === false) {
+      throw new Error("spawn_not_permitted");
+    }
+
+    // Budget validation
+    const effectiveHourly = input.hourly_limit_cents ?? parent.hourly_limit_cents;
+    const effectivePerTx = input.per_tx_limit_cents ?? parent.per_tx_limit_cents;
+    const effectiveDaily = input.daily_limit_cents;
+
+    if (effectiveHourly > parent.hourly_limit_cents) {
+      throw new Error("hourly_limit_exceeds_parent");
+    }
+    if (effectivePerTx > parent.per_tx_limit_cents) {
+      throw new Error("per_tx_limit_exceeds_parent");
+    }
+
+    const siblings = state.agents.filter((a) => a.parent_id === parentId);
+    const allocated = siblings.reduce((sum, s) => sum + s.daily_limit_cents, 0);
+    const remaining = parent.daily_limit_cents - allocated;
+    if (effectiveDaily > remaining) {
+      throw new Error("daily_limit_exceeds_remaining");
+    }
+
+    // Domain inheritance
+    const parentDomains = parent.allowed_domains ?? [];
+    const childDomains = input.allowed_domains ?? [];
+    if (parentDomains.length > 0 && childDomains.length > 0) {
+      const invalid = childDomains.filter((d) => !parentDomains.includes(d));
+      if (invalid.length > 0) {
+        throw new Error("domains_not_subset_of_parent");
+      }
+    }
+    const finalDomains =
+      parentDomains.length > 0 && childDomains.length === 0
+        ? parentDomains
+        : childDomains;
+
+    const apiKey = genApiKey();
+    const agent: AgentIdentity = {
+      id: genId("agent"),
+      wallet_id: parent.wallet_id,
+      owner_id: parent.owner_id,
+      parent_id: parentId,
+      name: input.name,
+      api_key_preview: apiKey.slice(-4),
+      status: "active",
+      hourly_limit_cents: effectiveHourly,
+      per_tx_limit_cents: effectivePerTx,
+      daily_limit_cents: effectiveDaily,
+      allowed_domains: finalDomains,
+      blocked_domains: parent.blocked_domains ?? [],
+      created_at: new Date().toISOString(),
+      last_seen_at: null,
+    };
+    state.agents.push(agent);
+
+    return {
+      agent_id: agent.id,
+      parent_id: parentId,
+      api_key: apiKey,
+      wallet_id: parent.wallet_id,
+      limits: {
+        hourly_limit_cents: effectiveHourly,
+        per_tx_limit_cents: effectivePerTx,
+        daily_limit_cents: effectiveDaily,
+      },
+      allowed_domains: finalDomains,
       warning: "Store this key securely. It will not be shown again.",
     };
   },

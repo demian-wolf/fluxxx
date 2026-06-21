@@ -4,6 +4,7 @@ import { db } from "../db";
 import { agentIdentitiesTable, agentWalletsTable, ledgerEntriesTable, spendPoliciesTable } from "../db/schema";
 import { generateAgentApiKey, hashApiKey } from "../services/auth";
 import { spentInWindow } from "../services/ledger";
+import { agentAuth } from "../middleware/agentAuth";
 import { userAuth } from "../middleware/userAuth";
 import { asyncHandler } from "../utils/asyncHandler";
 
@@ -393,6 +394,149 @@ router.post(
       .returning();
 
     res.status(201).json(policy);
+  }),
+);
+
+/**
+ * POST /api/agents/spawn
+ * An authenticated agent creates a child sub-agent. The calling agent becomes
+ * the parent. Budget validation ensures the child's limits don't exceed the
+ * parent's remaining capacity (daily_limit - sum of existing children's
+ * daily_limits). Domain access is inherited: if the parent has an allowlist the
+ * child's allowed_domains must be a subset.
+ *
+ * OS analog: fork() — a running process spawns a child that inherits a subset
+ * of the parent's resources.
+ */
+router.post(
+  "/spawn",
+  agentAuth,
+  asyncHandler(async (req, res) => {
+    const session = req.agent!;
+    const {
+      name,
+      hourly_limit_cents,
+      per_tx_limit_cents,
+      daily_limit_cents,
+      allowed_domains,
+    } = req.body ?? {};
+
+    if (typeof name !== "string" || !name.trim()) {
+      res.status(400).json({ error: "missing_name" });
+      return;
+    }
+    if (typeof daily_limit_cents !== "number" || daily_limit_cents <= 0) {
+      res.status(400).json({ error: "invalid_daily_limit" });
+      return;
+    }
+
+    const [parent] = await db
+      .select()
+      .from(agentIdentitiesTable)
+      .where(eq(agentIdentitiesTable.id, session.sub))
+      .limit(1);
+
+    if (!parent) {
+      res.status(404).json({ error: "parent_not_found" });
+      return;
+    }
+    if (parent.status !== "active") {
+      res.status(403).json({ error: "parent_not_active" });
+      return;
+    }
+
+    // Check the parent's active policy for a can_spawn flag.
+    const [parentPolicy] = await db
+      .select()
+      .from(spendPoliciesTable)
+      .where(and(eq(spendPoliciesTable.agentId, parent.id), eq(spendPoliciesTable.isActive, true)))
+      .limit(1);
+
+    const policyRules = parentPolicy?.rules as Record<string, unknown> | undefined;
+    if (policyRules?.can_spawn === false) {
+      res.status(403).json({ error: "spawn_not_permitted" });
+      return;
+    }
+
+    // Budget validation: child limits cannot exceed parent limits.
+    const effectiveHourly = Number(hourly_limit_cents ?? parent.hourlyLimitCents);
+    const effectivePerTx  = Number(per_tx_limit_cents ?? parent.perTxLimitCents);
+    const effectiveDaily  = Number(daily_limit_cents);
+
+    if (effectiveHourly > parent.hourlyLimitCents) {
+      res.status(400).json({ error: "hourly_limit_exceeds_parent", parent_hourly: parent.hourlyLimitCents });
+      return;
+    }
+    if (effectivePerTx > parent.perTxLimitCents) {
+      res.status(400).json({ error: "per_tx_limit_exceeds_parent", parent_per_tx: parent.perTxLimitCents });
+      return;
+    }
+
+    // Check remaining daily capacity: parent.dailyLimit - sum(children.dailyLimits)
+    const [siblingSum] = await db
+      .select({ total: sql<number>`coalesce(sum(${agentIdentitiesTable.dailyLimitCents}), 0)` })
+      .from(agentIdentitiesTable)
+      .where(eq(agentIdentitiesTable.parentId, parent.id));
+
+    const allocated = Number(siblingSum?.total ?? 0);
+    const remaining = parent.dailyLimitCents - allocated;
+    if (effectiveDaily > remaining) {
+      res.status(400).json({
+        error: "daily_limit_exceeds_remaining",
+        parent_daily: parent.dailyLimitCents,
+        already_allocated: allocated,
+        remaining,
+        requested: effectiveDaily,
+      });
+      return;
+    }
+
+    // Domain inheritance: child's allowed_domains must be a subset of parent's.
+    const parentDomains = parent.allowedDomains ?? [];
+    const childDomains: string[] = Array.isArray(allowed_domains) ? allowed_domains : [];
+    if (parentDomains.length > 0 && childDomains.length > 0) {
+      const invalid = childDomains.filter((d: string) => !parentDomains.includes(d));
+      if (invalid.length > 0) {
+        res.status(400).json({ error: "domains_not_subset_of_parent", invalid_domains: invalid });
+        return;
+      }
+    }
+    // If parent has an allowlist but child specifies none, child inherits parent's list.
+    const finalDomains = parentDomains.length > 0 && childDomains.length === 0
+      ? parentDomains
+      : childDomains.length > 0 ? childDomains : undefined;
+
+    const rawKey     = generateAgentApiKey();
+    const apiKeyHash = hashApiKey(rawKey);
+
+    const [child] = await db
+      .insert(agentIdentitiesTable)
+      .values({
+        walletId:         parent.walletId,
+        parentId:         parent.id,
+        ownerId:          parent.ownerId,
+        name:             name.trim(),
+        apiKeyHash,
+        hourlyLimitCents: effectiveHourly,
+        perTxLimitCents:  effectivePerTx,
+        dailyLimitCents:  effectiveDaily,
+        allowedDomains:   finalDomains,
+      })
+      .returning({ id: agentIdentitiesTable.id });
+
+    res.status(201).json({
+      agent_id:   child.id,
+      parent_id:  parent.id,
+      api_key:    rawKey,
+      wallet_id:  parent.walletId,
+      limits: {
+        hourly_limit_cents: effectiveHourly,
+        per_tx_limit_cents: effectivePerTx,
+        daily_limit_cents:  effectiveDaily,
+      },
+      allowed_domains: finalDomains ?? [],
+      warning: "Store this key securely. It will not be shown again.",
+    });
   }),
 );
 
