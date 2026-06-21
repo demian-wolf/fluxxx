@@ -39,3 +39,8 @@ Frontend runs on `http://localhost:5173`.
 - Real Mollie checkout via `POST /api/payments/deposit` when `MOLLIE_API_KEY` is set.
 - Mock checkout via `POST /api/payments/mock-deposit` for testing without a real API key.
 - The dedicated `/payments` page in the frontend lets you toggle between real and mock modes and simulate Pay / Fail / Cancel outcomes.
+
+## Agent Wallet Access
+
+- Reusable agent skill: `skills/flux-agent-wallet/SKILL.md`
+- Human-managed wallet authorization flow: `docs/agent-wallet-access.md`

@@ -1,0 +1,4 @@
+interface:
+  display_name: "FLUX Agent Wallet"
+  short_description: "Request human-approved FLUX wallet access"
+  default_prompt: "Use $flux-agent-wallet to request human authorization and spend from a human-managed FLUX wallet."
