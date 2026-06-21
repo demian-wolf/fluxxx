@@ -6,14 +6,26 @@ import type {
   TransactionFilters,
 } from "@/api/types";
 import type {
+  AgentAccessLimits,
+  AgentAccessRequest,
+  AgentAccessRequestStatus,
   AgentAnalytics,
   AgentIdentity,
   AgentStatus,
   AgentWallet,
+  AlertDelivery,
+  AlertEventType,
+  ApprovalQueueItem,
+  ApprovalQueueStats,
+  ApproveAgentAccessInput,
   AuthResponse,
   BillingAccount,
+  ConversionResult,
   CreateDepositInput,
   CreateDepositResponse,
+  CurrencyConfig,
+  DepletionForecast,
+  ExchangeRate,
   FeeEvent,
   GcEvent,
   GcStatus,
@@ -26,6 +38,7 @@ import type {
   OobStatus,
   PaymentMethod,
   PolicyCheck,
+  PolicyPluginInfo,
   PolicyRules,
   ProviderStats,
   RegisterAgentInput,
@@ -36,10 +49,13 @@ import type {
   SpawnAgentResponse,
   SpendPoint,
   SpendPolicy,
+  ReputationScore,
+  SupportedCurrency,
   SweepResult,
   TransactionRequest,
   User,
   WalletAnalytics,
+  WebhookConfig,
   WhiteLabelLicense,
 } from "@/types";
 
@@ -137,6 +153,52 @@ interface WireTransaction {
   tokenExpiresAt: string | null;
   ledgerEntryId: string | null;
   createdAt: string;
+}
+
+interface WireAgentAccessLimits {
+  perTxLimitCents?: number;
+  per_tx_limit_cents?: number;
+  hourlyLimitCents?: number;
+  hourly_limit_cents?: number;
+  dailyLimitCents?: number;
+  daily_limit_cents?: number;
+  allowedDomains?: string[] | null;
+  allowed_domains?: string[] | null;
+  blockedDomains?: string[] | null;
+  blocked_domains?: string[] | null;
+}
+
+interface WireAgentAccessRequest {
+  id: string;
+  request_id?: string;
+  agentId?: string;
+  agent_id?: string;
+  agentName?: string;
+  agent_name?: string;
+  walletId?: string;
+  wallet_id?: string;
+  walletName?: string;
+  wallet_name?: string;
+  walletBalanceCents?: number;
+  wallet_balance_cents?: number;
+  requester?: string;
+  requesterName?: string;
+  requester_name?: string;
+  reason?: string | null;
+  statusReason?: string | null;
+  status_reason?: string | null;
+  status?: "pending" | "pending_approval" | "approved" | "denied" | "rejected";
+  limits?: WireAgentAccessLimits | null;
+  requestedLimits?: WireAgentAccessLimits | null;
+  requested_limits?: WireAgentAccessLimits | null;
+  approvedLimits?: WireAgentAccessLimits | null;
+  approved_limits?: WireAgentAccessLimits | null;
+  createdAt?: string;
+  created_at?: string;
+  resolvedAt?: string | null;
+  resolved_at?: string | null;
+  resolvedBy?: string | null;
+  resolved_by?: string | null;
 }
 
 interface WirePayment {
@@ -253,6 +315,47 @@ function mapPolicy(w: WirePolicy): SpendPolicy {
     is_active: w.isActive,
     created_by: w.createdBy,
     created_at: w.createdAt,
+  };
+}
+
+function mapAgentAccessLimits(
+  w: WireAgentAccessLimits | null | undefined,
+): AgentAccessLimits {
+  return {
+    per_tx_limit_cents: w?.per_tx_limit_cents ?? w?.perTxLimitCents ?? 0,
+    hourly_limit_cents: w?.hourly_limit_cents ?? w?.hourlyLimitCents ?? 0,
+    daily_limit_cents: w?.daily_limit_cents ?? w?.dailyLimitCents ?? 0,
+    allowed_domains: w?.allowed_domains ?? w?.allowedDomains ?? [],
+    blocked_domains: w?.blocked_domains ?? w?.blockedDomains ?? [],
+  };
+}
+
+function mapAgentAccessStatus(
+  status: WireAgentAccessRequest["status"],
+): AgentAccessRequestStatus {
+  if (status === "approved") return "approved";
+  if (status === "denied" || status === "rejected") return "denied";
+  return "pending";
+}
+
+function mapAgentAccessRequest(w: WireAgentAccessRequest): AgentAccessRequest {
+  const limits = w.requested_limits ?? w.requestedLimits ?? w.limits;
+  const approved = w.approved_limits ?? w.approvedLimits ?? (w.status === "approved" ? limits : null);
+  return {
+    id: w.request_id ?? w.id,
+    agentId: w.agent_id ?? w.agentId ?? "",
+    agentName: w.agent_name ?? w.agentName ?? "Unknown agent",
+    walletId: w.wallet_id ?? w.walletId ?? "",
+    walletName: w.wallet_name ?? w.walletName ?? "Wallet",
+    walletBalanceCents: w.wallet_balance_cents ?? w.walletBalanceCents ?? 0,
+    requester: w.requester_name ?? w.requesterName ?? w.requester ?? "Agent",
+    reason: w.reason ?? w.status_reason ?? w.statusReason ?? "",
+    status: mapAgentAccessStatus(w.status),
+    requestedLimits: mapAgentAccessLimits(limits),
+    approvedLimits: approved ? mapAgentAccessLimits(approved) : null,
+    createdAt: w.created_at ?? w.createdAt ?? new Date().toISOString(),
+    resolvedAt: w.resolved_at ?? w.resolvedAt ?? null,
+    resolvedBy: w.resolved_by ?? w.resolvedBy ?? null,
   };
 }
 
@@ -392,6 +495,15 @@ export function createHttpApi(baseUrl: string): FluxApi {
     if (!entries.length) return "";
     return "?" + entries.map(([k, v]) => `${k}=${encodeURIComponent(v!)}`).join("&");
   };
+
+  const agentAccessBody = (input: ApproveAgentAccessInput) => ({
+    limits: input.limits,
+    ...(input.note ? { note: input.note } : {}),
+  });
+
+  const unwrapAgentAccess = (
+    res: WireAgentAccessRequest | { request: WireAgentAccessRequest },
+  ) => ("request" in res ? res.request : res);
 
   /** Fetch every agent once and index by id for name/limit enrichment. */
   async function agentIndex(): Promise<Map<string, AgentIdentity>> {
@@ -744,6 +856,123 @@ export function createHttpApi(baseUrl: string): FluxApi {
       return req<OobSimulateResult>("/api/oob/simulate", {
         method: "POST",
         body: JSON.stringify({ wallet_id: walletId, ...(thresholdCents != null ? { threshold_cents: thresholdCents } : {}) }),
+      });
+    },
+
+    async getForecast(walletId: string, windowHours?: number): Promise<DepletionForecast> {
+      return req<DepletionForecast>(
+        `/api/forecasting/${walletId}` +
+          qs({ window_hours: windowHours == null ? undefined : String(windowHours) }),
+      );
+    },
+
+    async getReputation(agentId: string): Promise<ReputationScore> {
+      return req<ReputationScore>(`/api/reputation/${agentId}`);
+    },
+    async getAllReputations(): Promise<ReputationScore[]> {
+      return req<ReputationScore[]>("/api/reputation");
+    },
+
+    async listWebhooks(): Promise<WebhookConfig[]> {
+      return req<WebhookConfig[]>("/api/alerts/webhooks");
+    },
+    async createWebhook(url: string, events: AlertEventType[], secret?: string): Promise<WebhookConfig> {
+      return req<WebhookConfig>("/api/alerts/webhooks", {
+        method: "POST",
+        body: JSON.stringify({ url, events, ...(secret ? { secret } : {}) }),
+      });
+    },
+    async deleteWebhook(id: string): Promise<void> {
+      await req<{ removed: boolean }>(`/api/alerts/webhooks/${id}`, { method: "DELETE" });
+    },
+    async getDeliveryLog(limit?: number): Promise<AlertDelivery[]> {
+      return req<AlertDelivery[]>(
+        "/api/alerts/deliveries" + qs({ limit: limit == null ? undefined : String(limit) }),
+      );
+    },
+
+    async getApprovalStats(): Promise<ApprovalQueueStats> {
+      return req<ApprovalQueueStats>("/api/approval/stats");
+    },
+    async listPendingApprovals(): Promise<ApprovalQueueItem[]> {
+      return req<ApprovalQueueItem[]>("/api/approval/queue");
+    },
+    async approveTransaction(transactionId: string): Promise<{ paymentToken: string; balanceAfterCents: number }> {
+      const res = await req<{ payment_token: string; balance_after_cents: number }>(
+        `/api/approval/${transactionId}/approve`,
+        { method: "POST" },
+      );
+      return { paymentToken: res.payment_token, balanceAfterCents: res.balance_after_cents };
+    },
+    async rejectTransaction(transactionId: string, reason?: string): Promise<void> {
+      await req<{ rejected: boolean }>(`/api/approval/${transactionId}/reject`, {
+        method: "POST",
+        body: JSON.stringify(reason ? { reason } : {}),
+      });
+    },
+
+    async listAgentAccessRequests(): Promise<AgentAccessRequest[]> {
+      const res = await req<
+        WireAgentAccessRequest[] | { requests: WireAgentAccessRequest[] }
+      >("/api/agent-access/operator/requests?status=pending");
+      const requests = Array.isArray(res) ? res : res.requests;
+      return requests.map(mapAgentAccessRequest);
+    },
+
+    async approveAgentAccessRequest(
+      id: string,
+      input: ApproveAgentAccessInput,
+    ): Promise<AgentAccessRequest> {
+      const res = await req<WireAgentAccessRequest | { request: WireAgentAccessRequest }>(
+        `/api/agent-access/operator/requests/${id}/approve`,
+        {
+          method: "POST",
+          body: JSON.stringify(agentAccessBody(input)),
+        },
+      );
+      return mapAgentAccessRequest(unwrapAgentAccess(res));
+    },
+
+    async denyAgentAccessRequest(
+      id: string,
+      reason?: string,
+    ): Promise<AgentAccessRequest> {
+      const res = await req<WireAgentAccessRequest | { request: WireAgentAccessRequest }>(
+        `/api/agent-access/operator/requests/${id}/deny`,
+        {
+          method: "POST",
+          body: JSON.stringify(reason ? { reason } : {}),
+        },
+      );
+      return mapAgentAccessRequest(unwrapAgentAccess(res));
+    },
+
+    async listPlugins(): Promise<PolicyPluginInfo[]> {
+      return req<PolicyPluginInfo[]>("/api/plugins");
+    },
+    async togglePlugin(pluginId: string, enabled: boolean): Promise<PolicyPluginInfo> {
+      return req<PolicyPluginInfo>(`/api/plugins/${pluginId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ enabled }),
+      });
+    },
+    async updatePluginConfig(pluginId: string, config: Record<string, unknown>): Promise<PolicyPluginInfo> {
+      return req<PolicyPluginInfo>(`/api/plugins/${pluginId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ config }),
+      });
+    },
+
+    async listCurrencies(): Promise<CurrencyConfig[]> {
+      return req<CurrencyConfig[]>("/api/currency/list");
+    },
+    async getExchangeRates(): Promise<ExchangeRate[]> {
+      return req<ExchangeRate[]>("/api/currency/rates");
+    },
+    async convertCurrency(amountCents: number, from: SupportedCurrency, to: SupportedCurrency): Promise<ConversionResult> {
+      return req<ConversionResult>("/api/currency/convert", {
+        method: "POST",
+        body: JSON.stringify({ amount_cents: amountCents, from, to }),
       });
     },
 

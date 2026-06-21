@@ -20,6 +20,7 @@ import { OobPage } from "@/pages/OobPage";
 import { ForecastPage } from "@/pages/ForecastPage";
 import { ReputationPage } from "@/pages/ReputationPage";
 import { ApprovalPage } from "@/pages/ApprovalPage";
+import { AgentAccessPage } from "@/pages/AgentAccessPage";
 import { WebhooksPage } from "@/pages/WebhooksPage";
 import { PluginsPage } from "@/pages/PluginsPage";
 import { CurrencyPage } from "@/pages/CurrencyPage";
@@ -58,6 +59,8 @@ export default function App() {
         <Route path="/forecast" element={<ForecastPage />} />
         <Route path="/reputation" element={<ReputationPage />} />
         <Route path="/approval" element={<ApprovalPage />} />
+        <Route path="/agent-access" element={<AgentAccessPage />} />
+        <Route path="/agent-access/authorize" element={<AgentAccessPage />} />
         <Route path="/webhooks" element={<WebhooksPage />} />
         <Route path="/plugins" element={<PluginsPage />} />
         <Route path="/currency" element={<CurrencyPage />} />
