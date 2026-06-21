@@ -13,6 +13,8 @@ import type {
   AuthResponse,
   CreateDepositInput,
   CreateDepositResponse,
+  GcEvent,
+  GcStatus,
   LedgerEntry,
   MolliePayment,
   PaymentMethod,
@@ -24,6 +26,7 @@ import type {
   SpawnAgentResponse,
   SpendPoint,
   SpendPolicy,
+  SweepResult,
   TransactionRequest,
   User,
   WalletAnalytics,
@@ -646,6 +649,53 @@ export function createHttpApi(baseUrl: string): FluxApi {
     },
     async getPaymentStatus(molliePaymentId): Promise<MolliePayment> {
       return mapPayment(await req<WirePayment>(`/api/payments/${molliePaymentId}/status`));
+    },
+
+    async getGcStatus(): Promise<GcStatus> {
+      const res = await req<{
+        totalEvents: number;
+        totalReclaimedCents: number;
+        totalLimitFreed: number;
+        lastSweepAt: string | null;
+      }>("/api/gc/status");
+      return {
+        total_events: res.totalEvents,
+        total_reclaimed_cents: res.totalReclaimedCents,
+        total_limit_freed: res.totalLimitFreed,
+        last_sweep_at: res.lastSweepAt,
+      };
+    },
+    async listGcEvents(): Promise<GcEvent[]> {
+      const events = await req<Array<{
+        id: string;
+        agentId: string;
+        walletId: string;
+        reason: GcEvent["reason"];
+        reclaimedCents: number;
+        dailyLimitFreed: number;
+        refundLedgerEntryId: string | null;
+        agentName: string;
+        parentAgentId: string | null;
+        createdAt: string;
+      }>>("/api/gc/events");
+      return events.map((e) => ({
+        id: e.id,
+        agent_id: e.agentId,
+        wallet_id: e.walletId,
+        reason: e.reason,
+        reclaimed_cents: e.reclaimedCents,
+        daily_limit_freed: e.dailyLimitFreed,
+        refund_ledger_entry_id: e.refundLedgerEntryId,
+        agent_name: e.agentName,
+        parent_agent_id: e.parentAgentId,
+        created_at: e.createdAt,
+      }));
+    },
+    async triggerSweep(ttlMs?: number): Promise<SweepResult> {
+      return req<SweepResult>("/api/gc/sweep", {
+        method: "POST",
+        body: JSON.stringify(ttlMs != null ? { ttl_ms: ttlMs } : {}),
+      });
     },
   };
 }

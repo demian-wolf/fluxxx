@@ -12,6 +12,9 @@ import type {
   AuthResponse,
   CreateDepositInput,
   CreateDepositResponse,
+  GcEvent,
+  GcReason,
+  GcStatus,
   LedgerEntry,
   MolliePayment,
   PolicyCheck,
@@ -22,6 +25,7 @@ import type {
   SpawnAgentResponse,
   SpendPoint,
   SpendPolicy,
+  SweepResult,
   TransactionRequest,
   User,
   WalletAnalytics,
@@ -219,6 +223,152 @@ function simulateTick() {
   emit();
 }
 
+// ---- GC simulation --------------------------------------------------------
+
+const GC_TTL_MS = 10 * 60 * 1000; // 10 minutes for demo mode
+
+function detectMockZombies(): Array<{ agent: AgentIdentity; reason: GcReason }> {
+  const cutoff = Date.now() - GC_TTL_MS;
+  const zombies: Array<{ agent: AgentIdentity; reason: GcReason }> = [];
+  const alreadyReclaimed = new Set(state.gcEvents.map((e) => e.agent_id));
+
+  for (const agent of state.agents) {
+    if (alreadyReclaimed.has(agent.id)) continue;
+    if (!agent.parent_id) continue; // root agents are not GC'd
+
+    if (agent.status === "revoked") {
+      zombies.push({ agent, reason: "agent_revoked" });
+    } else if (agent.status === "suspended") {
+      zombies.push({ agent, reason: "agent_suspended" });
+    } else if (
+      agent.status === "active" &&
+      agent.last_seen_at &&
+      new Date(agent.last_seen_at).getTime() < cutoff
+    ) {
+      zombies.push({ agent, reason: "ttl_expired" });
+    } else if (
+      agent.status === "active" &&
+      !agent.last_seen_at
+    ) {
+      zombies.push({ agent, reason: "ttl_expired" });
+    }
+  }
+  return zombies;
+}
+
+function reclaimAgent(agent: AgentIdentity, reason: GcReason): GcEvent | null {
+  const alreadyReclaimed = state.gcEvents.some((e) => e.agent_id === agent.id);
+  if (alreadyReclaimed) return null;
+
+  // Revoke the agent
+  if (agent.status !== "revoked") {
+    agent.status = "revoked";
+  }
+
+  // Cascade: revoke children
+  const queue = [agent.id];
+  const seen = new Set(queue);
+  while (queue.length) {
+    const current = queue.shift() as string;
+    for (const child of state.agents) {
+      if (child.parent_id === current && !seen.has(child.id)) {
+        seen.add(child.id);
+        child.status = "revoked";
+        queue.push(child.id);
+      }
+    }
+  }
+
+  const wallet = state.wallets.find((w) => w.id === agent.wallet_id);
+  const dailyLimitFreed = agent.daily_limit_cents;
+
+  // Check for unreleased holds
+  const pendingHolds = state.ledger.filter(
+    (e) => e.agent_id === agent.id && e.type === "hold" && e.status === "pending",
+  );
+  const reclaimedCents = pendingHolds.reduce((sum, e) => sum + e.amount_cents, 0);
+
+  let refundLedgerEntryId: string | null = null;
+
+  if (reclaimedCents > 0 && wallet) {
+    // Create refund ledger entry
+    const ledgerId = genId("led");
+    wallet.balance_cents += reclaimedCents;
+    wallet.updated_at = new Date().toISOString();
+    if (wallet.status === "depleted" && wallet.balance_cents > 0) {
+      wallet.status = "active";
+    }
+    state.ledger.push({
+      id: ledgerId,
+      wallet_id: wallet.id,
+      agent_id: agent.id,
+      agent_name: agent.name,
+      type: "refund",
+      amount_cents: reclaimedCents,
+      balance_after_cents: wallet.balance_cents,
+      description: `Capital reclamation: zombie agent "${agent.name}" (${reason})`,
+      payee_url: null,
+      mollie_payment_id: null,
+      payment_token: null,
+      status: "settled",
+      category: null,
+      metadata: { gc_reason: reason, reclaimed_from_agent: agent.id },
+      created_at: new Date().toISOString(),
+    });
+    refundLedgerEntryId = ledgerId;
+
+    // Mark holds as reversed
+    for (const hold of pendingHolds) {
+      hold.status = "reversed";
+    }
+  }
+
+  const gcEvent: GcEvent = {
+    id: genId("gc"),
+    agent_id: agent.id,
+    wallet_id: agent.wallet_id,
+    reason,
+    reclaimed_cents: reclaimedCents,
+    daily_limit_freed: dailyLimitFreed,
+    refund_ledger_entry_id: refundLedgerEntryId,
+    agent_name: agent.name,
+    parent_agent_id: agent.parent_id,
+    created_at: new Date().toISOString(),
+  };
+  state.gcEvents.push(gcEvent);
+  return gcEvent;
+}
+
+function runMockSweep(): SweepResult {
+  const zombies = detectMockZombies();
+  const events: GcEvent[] = [];
+  let totalReclaimedCents = 0;
+  let totalLimitFreed = 0;
+
+  for (const { agent, reason } of zombies) {
+    const event = reclaimAgent(agent, reason);
+    if (event) {
+      events.push(event);
+      totalReclaimedCents += event.reclaimed_cents;
+      totalLimitFreed += event.daily_limit_freed;
+    }
+  }
+
+  if (events.length > 0) emit();
+
+  return {
+    zombies_found: zombies.length,
+    events_created: events.length,
+    total_reclaimed_cents: totalReclaimedCents,
+    total_limit_freed: totalLimitFreed,
+    events,
+  };
+}
+
+function simulateGcTick() {
+  runMockSweep();
+}
+
 function ensureSimulation() {
   if (simStarted || typeof window === "undefined") return;
   simStarted = true;
@@ -227,6 +377,13 @@ function ensureSimulation() {
     setTimeout(loop, 2200 + Math.random() * 2600);
   };
   setTimeout(loop, 2500);
+
+  // Run GC sweep periodically (every 30s in demo mode)
+  const gcLoop = () => {
+    simulateGcTick();
+    setTimeout(gcLoop, 30_000 + Math.random() * 10_000);
+  };
+  setTimeout(gcLoop, 15_000);
 }
 
 // ---- helpers ---------------------------------------------------------------
@@ -722,5 +879,37 @@ export const mockApi: FluxApi = {
       emit();
     }
     return structuredClone(payment);
+  },
+
+  async getGcStatus(): Promise<GcStatus> {
+    await sleep(140);
+    const totalReclaimedCents = state.gcEvents.reduce(
+      (sum, e) => sum + e.reclaimed_cents,
+      0,
+    );
+    const totalLimitFreed = state.gcEvents.reduce(
+      (sum, e) => sum + e.daily_limit_freed,
+      0,
+    );
+    const lastEvent = state.gcEvents.length
+      ? state.gcEvents[state.gcEvents.length - 1]
+      : null;
+    return {
+      total_events: state.gcEvents.length,
+      total_reclaimed_cents: totalReclaimedCents,
+      total_limit_freed: totalLimitFreed,
+      last_sweep_at: lastEvent?.created_at ?? null,
+    };
+  },
+
+  async listGcEvents(): Promise<GcEvent[]> {
+    await sleep(180);
+    return structuredClone(state.gcEvents.slice().reverse());
+  },
+
+  async triggerSweep(ttlMs?: number): Promise<SweepResult> {
+    void ttlMs;
+    await sleep(600);
+    return structuredClone(runMockSweep());
   },
 };

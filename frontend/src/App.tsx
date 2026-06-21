@@ -15,6 +15,7 @@ import { AgentPolicyPage } from "@/pages/AgentPolicyPage";
 import { TransactionsPage } from "@/pages/TransactionsPage";
 import { TransactionDetailPage } from "@/pages/TransactionDetailPage";
 import { SettingsPage } from "@/pages/SettingsPage";
+import { GcPage } from "@/pages/GcPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 
 function RootRedirect() {
@@ -42,6 +43,7 @@ export default function App() {
         <Route path="/agents/:id/policy" element={<AgentPolicyPage />} />
         <Route path="/transactions" element={<TransactionsPage />} />
         <Route path="/transactions/:id" element={<TransactionDetailPage />} />
+        <Route path="/gc" element={<GcPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
 

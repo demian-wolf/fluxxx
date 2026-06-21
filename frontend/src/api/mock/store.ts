@@ -1,6 +1,7 @@
 import type {
   AgentIdentity,
   AgentWallet,
+  GcEvent,
   LedgerEntry,
   MolliePayment,
   PolicyCheck,
@@ -42,6 +43,7 @@ export interface MockState {
   ledger: LedgerEntry[];
   transactions: TransactionRequest[];
   payments: MolliePayment[];
+  gcEvents: GcEvent[];
 }
 
 const OPERATOR_ID = "user_operator01";
@@ -464,6 +466,7 @@ export function createInitialState(): MockState {
     ledger,
     transactions,
     payments: [],
+    gcEvents: [],
   };
 }
 
