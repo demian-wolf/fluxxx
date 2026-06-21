@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { db } from "../db";
 import { agentIdentitiesTable, agentWalletsTable, ledgerEntriesTable, spendPoliciesTable } from "../db/schema";
 import { generateAgentApiKey, hashApiKey } from "../services/auth";
@@ -20,6 +20,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const {
       wallet_id,
+      parent_id,
       name,
       hourly_limit_cents,
       per_tx_limit_cents,
@@ -47,6 +48,33 @@ router.post(
       return;
     }
 
+    // A child agent attaches under a parent in the spend tree. The parent must
+    // belong to the same operator and live in the same wallet.
+    if (parent_id != null) {
+      if (typeof parent_id !== "string") {
+        res.status(400).json({ error: "invalid_parent" });
+        return;
+      }
+      const [parent] = await db
+        .select({
+          id:       agentIdentitiesTable.id,
+          ownerId:  agentIdentitiesTable.ownerId,
+          walletId: agentIdentitiesTable.walletId,
+        })
+        .from(agentIdentitiesTable)
+        .where(eq(agentIdentitiesTable.id, parent_id))
+        .limit(1);
+
+      if (!parent || parent.ownerId !== req.userId) {
+        res.status(404).json({ error: "parent_not_found" });
+        return;
+      }
+      if (parent.walletId !== wallet_id) {
+        res.status(400).json({ error: "parent_wallet_mismatch" });
+        return;
+      }
+    }
+
     const rawKey    = generateAgentApiKey();
     const apiKeyHash = hashApiKey(rawKey);
 
@@ -54,6 +82,7 @@ router.post(
       .insert(agentIdentitiesTable)
       .values({
         walletId:         wallet_id,
+        parentId:         typeof parent_id === "string" ? parent_id : null,
         ownerId:          req.userId as string,
         name,
         apiKeyHash,
@@ -137,13 +166,50 @@ router.patch(
       return;
     }
 
-    const [updated] = await db
+    // Process-tree teardown: suspending or revoking a parent cascades to its
+    // entire subtree, mirroring how killing a parent process kills its children.
+    // Reactivating is intentionally not cascaded — children must be restarted
+    // explicitly.
+    const targetIds = [agent.id];
+    if (status === "suspended" || status === "revoked") {
+      const owned = await db
+        .select({ id: agentIdentitiesTable.id, parentId: agentIdentitiesTable.parentId })
+        .from(agentIdentitiesTable)
+        .where(eq(agentIdentitiesTable.ownerId, req.userId as string));
+
+      const childrenByParent = new Map<string, string[]>();
+      for (const row of owned) {
+        if (!row.parentId) continue;
+        const siblings = childrenByParent.get(row.parentId) ?? [];
+        siblings.push(row.id);
+        childrenByParent.set(row.parentId, siblings);
+      }
+
+      const queue = [agent.id];
+      const seen = new Set(queue);
+      while (queue.length) {
+        const current = queue.shift() as string;
+        for (const child of childrenByParent.get(current) ?? []) {
+          if (seen.has(child)) continue;
+          seen.add(child);
+          targetIds.push(child);
+          queue.push(child);
+        }
+      }
+    }
+
+    await db
       .update(agentIdentitiesTable)
       .set({ status: status as "active" | "suspended" | "revoked" })
-      .where(eq(agentIdentitiesTable.id, agent.id))
-      .returning();
+      .where(inArray(agentIdentitiesTable.id, targetIds));
 
-    res.json(updated);
+    const [updated] = await db
+      .select()
+      .from(agentIdentitiesTable)
+      .where(eq(agentIdentitiesTable.id, agent.id))
+      .limit(1);
+
+    res.json({ ...updated, affected_agent_ids: targetIds });
   }),
 );
 

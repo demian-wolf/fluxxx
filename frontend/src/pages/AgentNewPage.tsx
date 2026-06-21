@@ -26,9 +26,11 @@ export function AgentNewPage() {
   const { toast } = useToast();
   const [params] = useSearchParams();
   const wallets = useAsync(() => api.listWallets(), []);
+  const agents = useAsync(() => api.listAgents(), []);
 
   const [name, setName] = useState("");
   const [walletId, setWalletId] = useState(params.get("wallet") ?? "");
+  const [parentId, setParentId] = useState(params.get("parent") ?? "");
   const [policy, setPolicy] = useState<PolicyFormValues>(emptyPolicyValues);
   const [submitting, setSubmitting] = useState(false);
   const [created, setCreated] = useState<RegisterAgentResponse | null>(null);
@@ -41,6 +43,18 @@ export function AgentNewPage() {
   }));
   const effectiveWalletId = walletId || walletOptions[0]?.value || "";
 
+  // A child agent must live in the same wallet as its parent, so only offer
+  // agents from the selected wallet as parents.
+  const parentOptions = [
+    { value: "", label: "— None (root agent) —" },
+    ...(agents.data ?? [])
+      .filter((a) => a.wallet_id === effectiveWalletId)
+      .map((a) => ({ value: a.id, label: a.name })),
+  ];
+  const effectiveParentId = parentOptions.some((o) => o.value === parentId)
+    ? parentId
+    : "";
+
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !effectiveWalletId) {
@@ -52,6 +66,7 @@ export function AgentNewPage() {
       const limits = policyValuesToCents(policy);
       const res = await api.registerAgent({
         wallet_id: effectiveWalletId,
+        parent_id: effectiveParentId || null,
         name: name.trim(),
         ...limits,
         allowed_domains: parseDomainList(policy.allowed),
@@ -90,7 +105,21 @@ export function AgentNewPage() {
                 <Select
                   options={walletOptions}
                   value={effectiveWalletId}
-                  onChange={(e) => setWalletId(e.target.value)}
+                  onChange={(e) => {
+                    setWalletId(e.target.value);
+                    setParentId("");
+                  }}
+                />
+              </Field>
+
+              <Field
+                label="Parent agent"
+                hint="Optional. Nest this agent under a parent to form a spend tree; suspending the parent cascades to this agent."
+              >
+                <Select
+                  options={parentOptions}
+                  value={effectiveParentId}
+                  onChange={(e) => setParentId(e.target.value)}
                 />
               </Field>
 

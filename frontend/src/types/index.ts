@@ -45,6 +45,7 @@ export interface AgentIdentity {
   id: string;
   wallet_id: string;
   owner_id: string;
+  parent_id: string | null;
   name: string;
   api_key_preview: string; // last 4 chars, never the full key
   status: AgentStatus;
@@ -159,6 +160,7 @@ export interface WalletAnalytics {
 
 export interface RegisterAgentInput {
   wallet_id: string;
+  parent_id?: string | null;
   name: string;
   hourly_limit_cents: number;
   per_tx_limit_cents: number;

@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS "agent_identities" (
   "id"                 uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
   "wallet_id"          uuid NOT NULL REFERENCES "agent_wallets" ("id") ON DELETE CASCADE,
   "owner_id"           uuid NOT NULL REFERENCES "users" ("id") ON DELETE CASCADE,
+  "parent_id"          uuid REFERENCES "agent_identities" ("id") ON DELETE CASCADE,
   "name"               text NOT NULL,
   "api_key_hash"       text NOT NULL UNIQUE,
   "status"             "agent_status" DEFAULT 'active' NOT NULL,
@@ -126,6 +127,10 @@ CREATE TABLE IF NOT EXISTS "mollie_payments" (
   "webhook_received_at" timestamptz,
   "created_at"          timestamptz DEFAULT now() NOT NULL
 );
+
+-- Backfill the agent process-tree column on databases created before it existed.
+ALTER TABLE "agent_identities"
+  ADD COLUMN IF NOT EXISTS "parent_id" uuid REFERENCES "agent_identities" ("id") ON DELETE CASCADE;
 `;
 
 async function main(): Promise<void> {

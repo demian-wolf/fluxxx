@@ -73,6 +73,7 @@ Each registered AI agent. This is the "Know Your Agent" record.
 | `id` | UUID | Primary key |
 | `wallet_id` | UUID | FK → AgentWallet |
 | `owner_id` | UUID | FK → User |
+| `parent_id` | UUID \| null | Self-FK → AgentIdentity. Parent in the agent spend tree; null = root agent. `ON DELETE CASCADE` tears down the whole subtree. |
 | `name` | String | Human-readable label, e.g. "ResearchBot v2" |
 | `api_key_hash` | String | SHA-256 hash of the agent's secret API key (never stored in plain text) |
 | `status` | Enum | `active` \| `suspended` \| `revoked` |
