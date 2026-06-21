@@ -1,5 +1,5 @@
 import { Link, useParams } from "react-router-dom";
-import { Check, X } from "lucide-react";
+import { Check, X, CreditCard } from "lucide-react";
 import { api } from "@/api";
 import { useAsync } from "@/hooks/useAsync";
 import { PageHeader } from "@/components/PageHeader";
@@ -12,6 +12,7 @@ import { cn, formatCents, formatDateTime, formatTime } from "@/lib/utils";
 export function TransactionDetailPage() {
   const { id = "" } = useParams();
   const tx = useAsync(() => api.getTransaction(id), [id]);
+  const billing = useAsync(() => api.getBillingAccount(), []);
 
   if (tx.loading) return <LoadingState />;
   if (tx.error || !tx.data)
@@ -193,6 +194,47 @@ export function TransactionDetailPage() {
               )}
             </CardBody>
           </Card>
+
+          {t.decision === "approved" && billing.data && (
+            <Card>
+              <CardHeader
+                title={
+                  <span className="flex items-center gap-2">
+                    <CreditCard className="h-4 w-4 text-flux-amber" /> Platform fee
+                  </span>
+                }
+              />
+              <CardBody>
+                <dl className="space-y-2 text-sm">
+                  <Row label="Gross amount">
+                    <span className="font-mono text-ink">
+                      {formatCents(t.requested_amount_cents)}
+                    </span>
+                  </Row>
+                  <Row label="Fee rate">
+                    <span className="font-mono text-ink-muted">
+                      {(billing.data.tx_fee_bps / 100).toFixed(1)}%
+                    </span>
+                  </Row>
+                  <Row label="Fee">
+                    <span className="font-mono text-flux-amber">
+                      -{formatCents(
+                        Math.max(1, Math.round(t.requested_amount_cents * billing.data.tx_fee_bps / 10000)),
+                      )}
+                    </span>
+                  </Row>
+                  <Row label="Net to provider">
+                    <span className="font-mono text-flux-green">
+                      {formatCents(
+                        t.requested_amount_cents -
+                          Math.max(1, Math.round(t.requested_amount_cents * billing.data.tx_fee_bps / 10000)),
+                      )}
+                    </span>
+                  </Row>
+                </dl>
+              </CardBody>
+            </Card>
+          )}
         </div>
       </div>
     </>

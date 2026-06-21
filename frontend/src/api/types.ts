@@ -2,18 +2,25 @@ import type {
   AgentIdentity,
   AgentWallet,
   AuthResponse,
+  BillingAccount,
   CreateDepositInput,
   CreateDepositResponse,
+  FeeEvent,
   GcEvent,
   GcStatus,
   LedgerEntry,
+  LicensingStats,
+  MarketplaceProvider,
   MolliePayment,
   OobKillEvent,
   OobSimulateResult,
   OobStatus,
   PolicyRules,
+  ProviderStats,
   RegisterAgentInput,
   RegisterAgentResponse,
+  SaasPlan,
+  SaasTier,
   SpawnAgentInput,
   SpawnAgentResponse,
   SpendPoint,
@@ -22,6 +29,7 @@ import type {
   TransactionRequest,
   User,
   WalletAnalytics,
+  WhiteLabelLicense,
 } from "@/types";
 
 export interface LoginInput {
@@ -101,4 +109,19 @@ export interface FluxApi {
   getOobStatus(): Promise<OobStatus>;
   listOobEvents(): Promise<OobKillEvent[]>;
   simulateOobKill(walletId: string, thresholdCents?: number): Promise<OobSimulateResult>;
+
+  // billing & monetization
+  listPlans(): Promise<SaasPlan[]>;
+  getBillingAccount(): Promise<BillingAccount>;
+  changePlan(tier: SaasTier): Promise<BillingAccount>;
+  listFeeEvents(): Promise<FeeEvent[]>;
+
+  // provider marketplace
+  getProviderStats(): Promise<ProviderStats>;
+  listProviders(): Promise<MarketplaceProvider[]>;
+  verifyProvider(id: string): Promise<MarketplaceProvider>;
+
+  // white-label licensing
+  getLicensingStats(): Promise<LicensingStats>;
+  listLicenses(): Promise<WhiteLabelLicense[]>;
 }
