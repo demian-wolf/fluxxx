@@ -10,20 +10,27 @@ import type {
   AgentIdentity,
   AgentWallet,
   AuthResponse,
+  BillingAccount,
   CreateDepositInput,
   CreateDepositResponse,
+  FeeEvent,
   GcEvent,
   GcReason,
   GcStatus,
   LedgerEntry,
+  LicensingStats,
+  MarketplaceProvider,
   MolliePayment,
   OobKillEvent,
   OobSimulateResult,
   OobStatus,
   PolicyCheck,
   PolicyRules,
+  ProviderStats,
   RegisterAgentInput,
   RegisterAgentResponse,
+  SaasPlan,
+  SaasTier,
   SpawnAgentInput,
   SpawnAgentResponse,
   SpendPoint,
@@ -32,6 +39,7 @@ import type {
   TransactionRequest,
   User,
   WalletAnalytics,
+  WhiteLabelLicense,
 } from "@/types";
 import { sleep } from "@/lib/utils";
 import {
@@ -40,6 +48,7 @@ import {
   genId,
   genToken,
   MockState,
+  PLANS,
   SEED_PAYEES,
 } from "./store";
 
@@ -1047,5 +1056,79 @@ export const mockApi: FluxApi = {
   async simulateOobKill(walletId: string, thresholdCents?: number): Promise<OobSimulateResult> {
     await sleep(400);
     return structuredClone(runOobCheck(walletId, thresholdCents));
+  },
+
+  // ---- billing & monetization ------------------------------------------------
+
+  async listPlans(): Promise<SaasPlan[]> {
+    await sleep(140);
+    return structuredClone(PLANS);
+  },
+
+  async getBillingAccount(): Promise<BillingAccount> {
+    await sleep(180);
+    return structuredClone(state.billingAccount);
+  },
+
+  async changePlan(tier: SaasTier): Promise<BillingAccount> {
+    await sleep(520);
+    const plan = PLANS.find((p) => p.tier === tier);
+    if (!plan) throw new ApiError(400, "invalid_plan");
+    state.billingAccount.tier = tier;
+    state.billingAccount.tx_fee_bps = plan.tx_fee_bps;
+    return structuredClone(state.billingAccount);
+  },
+
+  async listFeeEvents(): Promise<FeeEvent[]> {
+    await sleep(180);
+    return structuredClone(state.feeEvents.slice().reverse());
+  },
+
+  // ---- provider marketplace --------------------------------------------------
+
+  async getProviderStats(): Promise<ProviderStats> {
+    await sleep(140);
+    const verified = state.providers.filter((p) => p.status === "verified").length;
+    const pending = state.providers.filter((p) => p.status === "pending").length;
+    const totalRevenue = state.providers.reduce((sum, p) => sum + p.total_revenue_cents, 0);
+    return {
+      total_providers: state.providers.length,
+      verified_providers: verified,
+      total_verification_revenue_cents: totalRevenue,
+      pending_verifications: pending,
+    };
+  },
+
+  async listProviders(): Promise<MarketplaceProvider[]> {
+    await sleep(180);
+    return structuredClone(state.providers);
+  },
+
+  async verifyProvider(id: string): Promise<MarketplaceProvider> {
+    await sleep(400);
+    const provider = state.providers.find((p) => p.id === id);
+    if (!provider) throw new ApiError(404, "provider_not_found");
+    provider.status = "verified";
+    return structuredClone(provider);
+  },
+
+  // ---- white-label licensing -------------------------------------------------
+
+  async getLicensingStats(): Promise<LicensingStats> {
+    await sleep(140);
+    const active = state.licenses.filter((l) => l.status === "active").length;
+    const totalRevenue = state.licenses.reduce((sum, l) => sum + l.monthly_fee_cents, 0);
+    const totalCalls = state.licenses.reduce((sum, l) => sum + l.api_calls_this_month, 0);
+    return {
+      total_licenses: state.licenses.length,
+      active_licenses: active,
+      total_monthly_revenue_cents: totalRevenue,
+      total_api_calls: totalCalls,
+    };
+  },
+
+  async listLicenses(): Promise<WhiteLabelLicense[]> {
+    await sleep(180);
+    return structuredClone(state.licenses);
   },
 };

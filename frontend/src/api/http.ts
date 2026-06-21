@@ -11,11 +11,15 @@ import type {
   AgentStatus,
   AgentWallet,
   AuthResponse,
+  BillingAccount,
   CreateDepositInput,
   CreateDepositResponse,
+  FeeEvent,
   GcEvent,
   GcStatus,
   LedgerEntry,
+  LicensingStats,
+  MarketplaceProvider,
   MolliePayment,
   OobKillEvent,
   OobSimulateResult,
@@ -23,8 +27,11 @@ import type {
   PaymentMethod,
   PolicyCheck,
   PolicyRules,
+  ProviderStats,
   RegisterAgentInput,
   RegisterAgentResponse,
+  SaasPlan,
+  SaasTier,
   SpawnAgentInput,
   SpawnAgentResponse,
   SpendPoint,
@@ -33,6 +40,7 @@ import type {
   TransactionRequest,
   User,
   WalletAnalytics,
+  WhiteLabelLicense,
 } from "@/types";
 
 const SESSION_KEY = "flux.session";
@@ -737,6 +745,39 @@ export function createHttpApi(baseUrl: string): FluxApi {
         method: "POST",
         body: JSON.stringify({ wallet_id: walletId, ...(thresholdCents != null ? { threshold_cents: thresholdCents } : {}) }),
       });
+    },
+
+    async listPlans(): Promise<SaasPlan[]> {
+      return req<SaasPlan[]>("/api/billing/plans");
+    },
+    async getBillingAccount(): Promise<BillingAccount> {
+      return req<BillingAccount>("/api/billing/account");
+    },
+    async changePlan(tier: SaasTier): Promise<BillingAccount> {
+      return req<BillingAccount>("/api/billing/plan", {
+        method: "POST",
+        body: JSON.stringify({ tier }),
+      });
+    },
+    async listFeeEvents(): Promise<FeeEvent[]> {
+      return req<FeeEvent[]>("/api/billing/fees");
+    },
+
+    async getProviderStats(): Promise<ProviderStats> {
+      return req<ProviderStats>("/api/providers/stats");
+    },
+    async listProviders(): Promise<MarketplaceProvider[]> {
+      return req<MarketplaceProvider[]>("/api/providers");
+    },
+    async verifyProvider(id: string): Promise<MarketplaceProvider> {
+      return req<MarketplaceProvider>(`/api/providers/${id}/verify`, { method: "POST" });
+    },
+
+    async getLicensingStats(): Promise<LicensingStats> {
+      return req<LicensingStats>("/api/licenses/stats");
+    },
+    async listLicenses(): Promise<WhiteLabelLicense[]> {
+      return req<WhiteLabelLicense[]>("/api/licenses");
     },
   };
 }

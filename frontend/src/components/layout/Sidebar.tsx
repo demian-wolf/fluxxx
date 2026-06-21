@@ -6,6 +6,9 @@ import {
   ReceiptText,
   Recycle,
   ShieldAlert,
+  CreditCard,
+  Store,
+  KeyRound,
   Settings,
   type LucideIcon,
 } from "lucide-react";
@@ -27,6 +30,9 @@ const items: NavItem[] = [
   { to: "/transactions", label: "Transactions", icon: ReceiptText },
   { to: "/gc", label: "Capital Reclamation", icon: Recycle },
   { to: "/oob", label: "OOB Killer", icon: ShieldAlert },
+  { to: "/billing", label: "Billing & Fees", icon: CreditCard },
+  { to: "/providers", label: "Providers", icon: Store },
+  { to: "/licensing", label: "Licensing", icon: KeyRound },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 
