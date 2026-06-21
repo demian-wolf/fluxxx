@@ -6,6 +6,7 @@ import type {
   TransactionFilters,
 } from "@/api/types";
 import type {
+  AgentAccessRequest,
   AgentAnalytics,
   AgentIdentity,
   AgentWallet,
@@ -13,6 +14,7 @@ import type {
   AlertEventType,
   ApprovalQueueItem,
   ApprovalQueueStats,
+  ApproveAgentAccessInput,
   AuthResponse,
   BillingAccount,
   ConversionResult,
@@ -1202,6 +1204,53 @@ export const mockApi: FluxApi = {
     if (idx >= 0) mockApprovalQueue.splice(idx, 1);
   },
 
+  // ---- Agent Wallet Access ----
+
+  async listAgentAccessRequests(): Promise<AgentAccessRequest[]> {
+    await sleep(150);
+    return structuredClone(
+      mockAgentAccessRequests.filter((request) => request.status === "pending"),
+    );
+  },
+
+  async approveAgentAccessRequest(
+    id: string,
+    input: ApproveAgentAccessInput,
+  ): Promise<AgentAccessRequest> {
+    await sleep(300);
+    const request = mockAgentAccessRequests.find((item) => item.id === id);
+    if (!request) throw new ApiError(404, "agent_access_request_not_found");
+    const resolved: AgentAccessRequest = {
+      ...request,
+      status: "approved",
+      approvedLimits: { ...input.limits },
+      resolvedAt: new Date().toISOString(),
+      resolvedBy: state.user.email,
+    };
+    const idx = mockAgentAccessRequests.findIndex((item) => item.id === id);
+    mockAgentAccessRequests.splice(idx, 1, resolved);
+    return structuredClone(resolved);
+  },
+
+  async denyAgentAccessRequest(
+    id: string,
+    reason?: string,
+  ): Promise<AgentAccessRequest> {
+    await sleep(220);
+    const request = mockAgentAccessRequests.find((item) => item.id === id);
+    if (!request) throw new ApiError(404, "agent_access_request_not_found");
+    const resolved: AgentAccessRequest = {
+      ...request,
+      reason: reason?.trim() || request.reason,
+      status: "denied",
+      resolvedAt: new Date().toISOString(),
+      resolvedBy: state.user.email,
+    };
+    const idx = mockAgentAccessRequests.findIndex((item) => item.id === id);
+    mockAgentAccessRequests.splice(idx, 1, resolved);
+    return structuredClone(resolved);
+  },
+
   // ---- Policy Plugins ----
 
   async listPlugins(): Promise<PolicyPluginInfo[]> {
@@ -1344,6 +1393,53 @@ const mockDeliveries: AlertDelivery[] = [
 const mockApprovalQueue: ApprovalQueueItem[] = [
   { id: "txn_approval1", agentId: "agent_researchbot1", agentName: "ResearchBot v1", walletId: "wallet_research01", walletName: "ResearchBot Budget", requestedAmountCents: 750, payeeUrl: "https://premium-data.io/api/v2/datasets/full", description: "Full premium dataset access license", status: "pending_approval", createdAt: new Date(Date.now() - 300_000).toISOString(), resolvedAt: null, resolvedBy: null },
   { id: "txn_approval2", agentId: "agent_dataminer2", agentName: "DataMiner", walletId: "wallet_research01", walletName: "ResearchBot Budget", requestedAmountCents: 1200, payeeUrl: "https://compute-market.io/gpu/a100/1hr", description: "A100 GPU hour for embedding generation", status: "pending_approval", createdAt: new Date(Date.now() - 120_000).toISOString(), resolvedAt: null, resolvedBy: null },
+];
+
+const mockAgentAccessRequests: AgentAccessRequest[] = [
+  {
+    id: "aar_demo_reporting",
+    agentId: "agent_reporting_cli",
+    agentName: "Reporting CLI Worker",
+    walletId: "wallet_research01",
+    walletName: "ResearchBot Budget",
+    walletBalanceCents: 1990,
+    requester: "codex-worker-d@local",
+    reason: "Needs temporary wallet access to buy premium research extracts for the weekly report.",
+    status: "pending",
+    requestedLimits: {
+      per_tx_limit_cents: 150,
+      hourly_limit_cents: 300,
+      daily_limit_cents: 700,
+      allowed_domains: ["dataset.io", "arxiv.org"],
+      blocked_domains: [],
+    },
+    approvedLimits: null,
+    createdAt: new Date(Date.now() - 9 * 60_000).toISOString(),
+    resolvedAt: null,
+    resolvedBy: null,
+  },
+  {
+    id: "aar_demo_infra",
+    agentId: "agent_infra_remediator",
+    agentName: "Infra Remediator",
+    walletId: "wallet_ops02",
+    walletName: "Ops Automation",
+    walletBalanceCents: 4725,
+    requester: "autonomous-remediation-loop",
+    reason: "Requests operator-managed wallet access for proxy leases while verifying production incidents.",
+    status: "pending",
+    requestedLimits: {
+      per_tx_limit_cents: 600,
+      hourly_limit_cents: 1200,
+      daily_limit_cents: 2400,
+      allowed_domains: ["proxymesh.io", "serpapi.com"],
+      blocked_domains: ["gambling.com", "ads.example.com"],
+    },
+    approvedLimits: null,
+    createdAt: new Date(Date.now() - 3 * 60_000).toISOString(),
+    resolvedAt: null,
+    resolvedBy: null,
+  },
 ];
 
 const mockPlugins: PolicyPluginInfo[] = [

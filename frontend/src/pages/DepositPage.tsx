@@ -108,12 +108,20 @@ export function DepositPage() {
               </div>
 
               <div>
-                <label className="label">Payment method</label>
-                <div className="space-y-2">
+                <p id="payment-method-label" className="label">
+                  Payment method
+                </p>
+                <div
+                  className="space-y-2"
+                  role="radiogroup"
+                  aria-labelledby="payment-method-label"
+                >
                   {methods.map(({ id: mid, label, icon: Icon, note }) => (
                     <button
                       key={mid}
                       type="button"
+                      role="radio"
+                      aria-checked={method === mid}
                       onClick={() => setMethod(mid)}
                       className={cn(
                         "flex w-full items-center gap-3 rounded-lg border px-3 py-3 text-left transition",

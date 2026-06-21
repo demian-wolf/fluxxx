@@ -1,10 +1,12 @@
 import type {
   AgentIdentity,
+  AgentAccessRequest,
   AgentWallet,
   AlertDelivery,
   AlertEventType,
   ApprovalQueueItem,
   ApprovalQueueStats,
+  ApproveAgentAccessInput,
   AuthResponse,
   BillingAccount,
   ConversionResult,
@@ -140,6 +142,11 @@ export interface FluxApi {
   listPendingApprovals(): Promise<ApprovalQueueItem[]>;
   approveTransaction(transactionId: string): Promise<{ paymentToken: string; balanceAfterCents: number }>;
   rejectTransaction(transactionId: string, reason?: string): Promise<void>;
+
+  // Agent wallet access
+  listAgentAccessRequests(): Promise<AgentAccessRequest[]>;
+  approveAgentAccessRequest(id: string, input: ApproveAgentAccessInput): Promise<AgentAccessRequest>;
+  denyAgentAccessRequest(id: string, reason?: string): Promise<AgentAccessRequest>;
 
   // Policy Plugins
   listPlugins(): Promise<PolicyPluginInfo[]>;

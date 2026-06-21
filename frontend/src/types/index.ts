@@ -475,6 +475,40 @@ export interface ApprovalQueueStats {
   totalValue: number;
 }
 
+// ----- Agent Wallet Access -----
+
+export type AgentAccessRequestStatus = "pending" | "approved" | "denied";
+
+export interface AgentAccessLimits {
+  per_tx_limit_cents: number;
+  hourly_limit_cents: number;
+  daily_limit_cents: number;
+  allowed_domains: string[];
+  blocked_domains: string[];
+}
+
+export interface AgentAccessRequest {
+  id: string;
+  agentId: string;
+  agentName: string;
+  walletId: string;
+  walletName: string;
+  walletBalanceCents: number;
+  requester: string;
+  reason: string;
+  status: AgentAccessRequestStatus;
+  requestedLimits: AgentAccessLimits;
+  approvedLimits: AgentAccessLimits | null;
+  createdAt: ISODateString;
+  resolvedAt: ISODateString | null;
+  resolvedBy: string | null;
+}
+
+export interface ApproveAgentAccessInput {
+  limits: AgentAccessLimits;
+  note?: string;
+}
+
 // ----- Policy Plugins -----
 
 export interface PolicyPluginInfo {
