@@ -4,6 +4,7 @@ import {
   Wallet,
   Bot,
   ReceiptText,
+  Recycle,
   Settings,
   type LucideIcon,
 } from "lucide-react";
@@ -23,6 +24,7 @@ const items: NavItem[] = [
   { to: "/wallets", label: "Wallets", icon: Wallet },
   { to: "/agents", label: "Agents", icon: Bot },
   { to: "/transactions", label: "Transactions", icon: ReceiptText },
+  { to: "/gc", label: "Capital Reclamation", icon: Recycle },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 

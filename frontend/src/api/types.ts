@@ -4,6 +4,8 @@ import type {
   AuthResponse,
   CreateDepositInput,
   CreateDepositResponse,
+  GcEvent,
+  GcStatus,
   LedgerEntry,
   MolliePayment,
   PolicyRules,
@@ -13,6 +15,7 @@ import type {
   SpawnAgentResponse,
   SpendPoint,
   SpendPolicy,
+  SweepResult,
   TransactionRequest,
   User,
   WalletAnalytics,
@@ -85,4 +88,9 @@ export interface FluxApi {
   // payments (Mollie)
   createDeposit(input: CreateDepositInput): Promise<CreateDepositResponse>;
   getPaymentStatus(molliePaymentId: string): Promise<MolliePayment>;
+
+  // capital reclamation (Agentic GC)
+  getGcStatus(): Promise<GcStatus>;
+  listGcEvents(): Promise<GcEvent[]>;
+  triggerSweep(ttlMs?: number): Promise<SweepResult>;
 }

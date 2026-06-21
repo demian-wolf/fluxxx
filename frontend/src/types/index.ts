@@ -216,3 +216,35 @@ export interface SpendPoint {
   ts: ISODateString;
   spent_cents: number;
 }
+
+// ----- Capital Reclamation (Agentic GC) -----
+
+export type GcReason = "ttl_expired" | "agent_revoked" | "agent_suspended" | "parent_terminated";
+
+export interface GcEvent {
+  id: string;
+  agent_id: string;
+  wallet_id: string;
+  reason: GcReason;
+  reclaimed_cents: number;
+  daily_limit_freed: number;
+  refund_ledger_entry_id: string | null;
+  agent_name: string;
+  parent_agent_id: string | null;
+  created_at: ISODateString;
+}
+
+export interface GcStatus {
+  total_events: number;
+  total_reclaimed_cents: number;
+  total_limit_freed: number;
+  last_sweep_at: ISODateString | null;
+}
+
+export interface SweepResult {
+  zombies_found: number;
+  events_created: number;
+  total_reclaimed_cents: number;
+  total_limit_freed: number;
+  events: GcEvent[];
+}
