@@ -85,6 +85,32 @@ Each registered AI agent. This is the "Know Your Agent" record.
 
 ---
 
+### 1.3a `AgentAccessRequest`
+External CLI/agent requests for access to a human-managed wallet. The operator approves or denies the request; approval creates an `AgentIdentity`.
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | UUID | Primary key and polling identifier |
+| `wallet_id` | UUID | FK → AgentWallet |
+| `owner_id` | UUID | FK → User/operator who owns the wallet |
+| `request_code` | String | Short human-readable code returned to the CLI |
+| `agent_name` | String | Requested agent display name |
+| `requested_scopes` | String[] | Optional requested access labels |
+| `requested_metadata` | JSON | CLI/agent metadata, e.g. command, host, purpose |
+| `hourly_limit_cents` | Integer \| null | Requested spend limit |
+| `per_tx_limit_cents` | Integer \| null | Requested spend limit |
+| `daily_limit_cents` | Integer \| null | Requested spend limit |
+| `allowed_domains` | String[] \| null | Requested payee domain allowlist |
+| `blocked_domains` | String[] \| null | Requested payee domain blocklist |
+| `status` | Enum | `pending` \| `approved` \| `denied` \| `expired` |
+| `agent_id` | UUID \| null | Created on approval |
+| `agent_api_key_once` | String \| null | Raw key staged only until first successful CLI poll |
+| `api_key_delivered_at` | DateTime \| null | Set when the staged key is consumed |
+| `expires_at` | DateTime | Pending request expiry |
+| `approved_at` / `denied_at` | DateTime \| null | Review timestamps |
+
+---
+
 ### 1.4 `SpendPolicy`
 Versioned policy rules attached to an agent. Evaluated by the policy engine on every transaction.
 
@@ -207,6 +233,56 @@ POST /api/auth/agent
 ```
 
 ---
+
+### 2.1a Agent Wallet Access Request
+```
+POST /api/agent-access/requests
+```
+**Purpose**: An external CLI/agent asks the human wallet owner for bounded wallet access.
+
+**Request**
+```json
+{
+  "wallet_id": "uuid",
+  "agent_name": "Codex Worker",
+  "requested_scopes": ["wallet:spend"],
+  "metadata": { "purpose": "Unlock required research data" },
+  "limits": {
+    "per_tx_limit_cents": 50,
+    "hourly_limit_cents": 200,
+    "daily_limit_cents": 500,
+    "allowed_domains": ["example.com"],
+    "blocked_domains": []
+  },
+  "expires_in_seconds": 3600
+}
+```
+
+**Response (201)**
+```json
+{
+  "request_id": "uuid",
+  "request_code": "AGT-ABCD1234",
+  "status": "pending",
+  "authorize_url": "http://localhost:5173/agent-access/authorize?request_id=uuid&code=AGT-ABCD1234",
+  "status_url": "http://localhost:3000/api/agent-access/requests/uuid?request_code=AGT-ABCD1234"
+}
+```
+
+```
+GET /api/agent-access/requests/{request_id}?request_code=<request_code>
+```
+**Purpose**: The requesting agent polls for approval. If approved, the raw API key is returned once and immediately cleared from the request row.
+
+```
+GET /api/agent-access/operator/requests
+POST /api/agent-access/operator/requests/{request_id}/approve
+POST /api/agent-access/operator/requests/{request_id}/deny
+Authorization: Bearer <user_jwt>
+```
+**Purpose**: The human operator reviews pending access requests. Approval creates an `AgentIdentity` and active `SpendPolicy`; denial records `status_reason`.
+
+> Production hardening: the current implementation temporarily stores `agent_api_key_once` in the database for a single CLI poll. Encrypt this value or replace it with a stronger out-of-band delivery channel before a production deployment.
 
 ### 2.2 Transaction Request (Core HTTP 402 Flow)
 ```

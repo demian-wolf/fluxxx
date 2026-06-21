@@ -1,6 +1,7 @@
 import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import authRoutes from "./routes/auth";
+import agentAccessRoutes from "./routes/agentAccess";
 import agentRoutes from "./routes/agents";
 import transactionRoutes from "./routes/transactions";
 import tokenRoutes from "./routes/tokens";
@@ -26,6 +27,7 @@ export function createApp(): express.Express {
   });
 
   app.use("/api/auth", authRoutes);
+  app.use("/api/agent-access", agentAccessRoutes);
   app.use("/api/agents", agentRoutes);
   app.use("/api/transactions", transactionRoutes);
   app.use("/api/tokens", tokenRoutes);
