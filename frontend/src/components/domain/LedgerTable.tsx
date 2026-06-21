@@ -103,8 +103,11 @@ export function LedgerTable({
     <div>
       <div className="flex flex-wrap items-end gap-3 border-b border-line px-4 py-3">
         <div className="w-40">
-          <label className="label">Type</label>
+          <label className="label" htmlFor="ledger-type">
+            Type
+          </label>
           <Select
+            id="ledger-type"
             options={typeOptions}
             value={type}
             onChange={(e) => {
@@ -114,8 +117,11 @@ export function LedgerTable({
           />
         </div>
         <div className="w-48">
-          <label className="label">Agent</label>
+          <label className="label" htmlFor="ledger-agent">
+            Agent
+          </label>
           <Select
+            id="ledger-agent"
             options={[{ value: "all", label: "All agents" }, ...agentOptions]}
             value={agent}
             onChange={(e) => {
@@ -125,8 +131,11 @@ export function LedgerTable({
           />
         </div>
         <div className="w-44">
-          <label className="label">From date</label>
+          <label className="label" htmlFor="ledger-from-date">
+            From date
+          </label>
           <input
+            id="ledger-from-date"
             type="date"
             value={from}
             onChange={(e) => {

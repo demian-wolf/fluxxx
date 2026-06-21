@@ -1,4 +1,11 @@
-import { forwardRef, type InputHTMLAttributes, type ReactNode } from "react";
+import {
+  cloneElement,
+  forwardRef,
+  isValidElement,
+  useId,
+  type InputHTMLAttributes,
+  type ReactNode,
+} from "react";
 import { cn } from "@/lib/utils";
 
 interface FieldProps {
@@ -9,15 +16,45 @@ interface FieldProps {
   children: ReactNode;
 }
 
+type FieldControlProps = {
+  id?: string;
+  "aria-describedby"?: string;
+};
+
 export function Field({ label, hint, error, className, children }: FieldProps) {
+  const generatedId = useId();
+  const descriptionId = error || hint ? `${generatedId}-description` : undefined;
+  let labelFor: string | undefined;
+  let fieldChildren = children;
+
+  if (isValidElement<FieldControlProps>(children)) {
+    const controlId = children.props.id ?? generatedId;
+    labelFor = controlId;
+
+    fieldChildren = cloneElement(children, {
+      id: controlId,
+      "aria-describedby": [children.props["aria-describedby"], descriptionId]
+        .filter(Boolean)
+        .join(" ") || undefined,
+    });
+  }
+
   return (
     <div className={className}>
-      {label && <label className="label">{label}</label>}
-      {children}
+      {label && (
+        <label className="label" htmlFor={labelFor}>
+          {label}
+        </label>
+      )}
+      {fieldChildren}
       {error ? (
-        <p className="mt-1 text-xs text-flux-red">{error}</p>
+        <p id={descriptionId} className="mt-1 text-xs text-flux-red">
+          {error}
+        </p>
       ) : hint ? (
-        <p className="mt-1 text-xs text-ink-faint">{hint}</p>
+        <p id={descriptionId} className="mt-1 text-xs text-ink-faint">
+          {hint}
+        </p>
       ) : null}
     </div>
   );

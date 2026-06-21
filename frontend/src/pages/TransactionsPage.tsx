@@ -99,16 +99,22 @@ export function TransactionsPage() {
       <Card>
         <div className="flex flex-wrap items-end gap-3 border-b border-line px-4 py-3">
           <div className="min-w-[180px] flex-1">
-            <label className="label">Search</label>
+            <label className="label" htmlFor="transaction-search">
+              Search
+            </label>
             <Input
+              id="transaction-search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Payee, description, agent…"
             />
           </div>
           <div className="w-44">
-            <label className="label">Agent</label>
+            <label className="label" htmlFor="transaction-agent">
+              Agent
+            </label>
             <Select
+              id="transaction-agent"
               options={[
                 { value: "all", label: "All agents" },
                 ...(agents.data ?? []).map((a) => ({ value: a.id, label: a.name })),
@@ -118,16 +124,22 @@ export function TransactionsPage() {
             />
           </div>
           <div className="w-40">
-            <label className="label">Decision</label>
+            <label className="label" htmlFor="transaction-decision">
+              Decision
+            </label>
             <Select
+              id="transaction-decision"
               options={typeOptions}
               value={type}
               onChange={(e) => setType(e.target.value)}
             />
           </div>
           <div className="w-44">
-            <label className="label">From date</label>
+            <label className="label" htmlFor="transaction-from-date">
+              From date
+            </label>
             <input
+              id="transaction-from-date"
               type="date"
               value={from}
               onChange={(e) => setFrom(e.target.value)}

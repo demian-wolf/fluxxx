@@ -14,7 +14,7 @@ export function PolicyFields({
   return (
     <div className="space-y-5">
       <div>
-        <label className="label">Spend limits</label>
+        <p className="label">Spend limits</p>
         <div className="grid gap-3 rounded-lg border border-line bg-bg-raised/30 p-4 sm:grid-cols-3">
           <Field label="Per transaction">
             <Input
