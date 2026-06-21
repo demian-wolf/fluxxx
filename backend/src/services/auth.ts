@@ -24,7 +24,7 @@ export function generateAgentApiKey(): string {
   return AGENT_KEY_PREFIX + crypto.randomBytes(24).toString("hex");
 }
 
-/** SHA-256 hash an API key for storage (raw key is never persisted). */
+/** SHA-256 hash an API key for long-term credential storage. */
 export function hashApiKey(rawKey: string): string {
   return crypto.createHash("sha256").update(rawKey).digest("hex");
 }

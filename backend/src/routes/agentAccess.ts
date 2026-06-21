@@ -46,6 +46,7 @@ const listRequestsQuerySchema = z.object({
 const approveRequestSchema = z.object({
   agent_name: z.string().trim().min(1).max(120).optional(),
   limits: limitsSchema.optional(),
+  note: z.string().trim().min(1).max(500).optional(),
 }).strict();
 
 const denyRequestSchema = z.object({
@@ -423,6 +424,7 @@ router.post(
         .update(agentAccessRequestsTable)
         .set({
           status:           "approved",
+          statusReason:     bodyParse.data.note,
           reviewedBy:       req.userId as string,
           agentId:          agent.id,
           agentApiKeyOnce:  rawKey,

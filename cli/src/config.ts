@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { homedir } from "node:os";
 import type { AgentAuthResponse, AgentSessionRecord, FluxAgentConfig, JsonObject } from "./types";
@@ -33,6 +33,7 @@ export async function writeConfig(configPath: string, config: FluxAgentConfig): 
     encoding: "utf8",
     mode: 0o600,
   });
+  await chmod(configPath, 0o600);
 }
 
 export async function writeJsonOutput(outputPath: string, data: unknown): Promise<void> {
@@ -41,6 +42,7 @@ export async function writeJsonOutput(outputPath: string, data: unknown): Promis
     encoding: "utf8",
     mode: 0o600,
   });
+  await chmod(outputPath, 0o600);
 }
 
 export function withRequestUpdate(
