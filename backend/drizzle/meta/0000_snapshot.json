@@ -1,5 +1,5 @@
 {
-  "id": "e7c4b73c-b3d1-4506-93cc-de0a5d142a12",
+  "id": "36ed3390-c7c5-458a-add0-f752afd2fe54",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -92,13 +92,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": 0
-        },
-        "currency": {
-          "name": "currency",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'EUR'"
         },
         "status": {
           "name": "status",
@@ -522,13 +515,6 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true
-        },
-        "currency": {
-          "name": "currency",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'EUR'"
         },
         "method": {
           "name": "method",

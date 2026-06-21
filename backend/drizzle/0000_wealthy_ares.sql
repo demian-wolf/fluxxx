@@ -19,7 +19,6 @@ CREATE TABLE "agent_wallets" (
 	"owner_id" uuid NOT NULL,
 	"name" text NOT NULL,
 	"balance_cents" integer DEFAULT 0 NOT NULL,
-	"currency" text DEFAULT 'EUR' NOT NULL,
 	"status" "wallet_status" DEFAULT 'active' NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
@@ -74,7 +73,6 @@ CREATE TABLE "mollie_payments" (
 	"wallet_id" uuid NOT NULL,
 	"mollie_payment_id" text NOT NULL,
 	"amount_cents" integer NOT NULL,
-	"currency" text DEFAULT 'EUR' NOT NULL,
 	"method" text,
 	"status" "mollie_payment_status" DEFAULT 'open' NOT NULL,
 	"checkout_url" text NOT NULL,

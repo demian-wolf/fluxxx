@@ -56,7 +56,6 @@ The funded virtual account that backs one or more agents. Funded via Mollie.
 | `owner_id` | UUID | FK → User |
 | `name` | String | e.g. "Research Budget Q3" |
 | `balance_cents` | Integer | Current balance in euro cents (e.g. 2000 = €20.00) |
-| `currency` | String | Default: `EUR` |
 | `status` | Enum | `active` \| `suspended` \| `depleted` |
 | `created_at` | DateTime | |
 | `updated_at` | DateTime | |
@@ -145,7 +144,6 @@ Tracks Mollie deposit sessions initiated by the human operator.
 | `wallet_id` | UUID | FK → AgentWallet |
 | `mollie_payment_id` | String | Mollie's own ID (e.g. `tr_abc123`) |
 | `amount_cents` | Integer | Amount in euro cents |
-| `currency` | String | `EUR` |
 | `method` | String | `ideal` \| `creditcard` \| `banktransfer` |
 | `status` | Enum | `open` \| `pending` \| `paid` \| `failed` \| `expired` |
 | `checkout_url` | String | Mollie hosted checkout link |

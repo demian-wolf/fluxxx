@@ -9,7 +9,6 @@ export const agentWalletsTable = pgTable("agent_wallets", {
   ownerId:      uuid("owner_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
   name:         text("name").notNull(),
   balanceCents: integer("balance_cents").notNull().default(0),
-  currency:     text("currency").notNull().default("EUR"),
   status:       walletStatusEnum("status").notNull().default("active"),
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

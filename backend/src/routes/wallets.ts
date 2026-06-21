@@ -19,7 +19,7 @@ router.post(
   "/",
   userAuth,
   asyncHandler(async (req, res) => {
-    const { name, currency } = req.body ?? {};
+    const { name } = req.body ?? {};
     if (typeof name !== "string" || name.trim() === "") {
       res.status(400).json({ error: "missing_name" });
       return;
@@ -28,9 +28,8 @@ router.post(
     const [wallet] = await db
       .insert(agentWalletsTable)
       .values({
-        ownerId:  req.userId as string,
-        name:     name.trim(),
-        currency: typeof currency === "string" ? currency.toUpperCase() : "EUR",
+        ownerId: req.userId as string,
+        name:    name.trim(),
       })
       .returning();
 
