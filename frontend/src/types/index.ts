@@ -39,6 +39,7 @@ export interface PolicyRules {
   blocked_domains?: string[];
   require_description?: boolean;
   auto_suspend_on_anomaly?: boolean;
+  can_spawn?: boolean;
 }
 
 export interface AgentIdentity {
@@ -172,6 +173,28 @@ export interface RegisterAgentInput {
 export interface RegisterAgentResponse {
   agent: AgentIdentity;
   api_key: string;
+  warning: string;
+}
+
+export interface SpawnAgentInput {
+  name: string;
+  hourly_limit_cents?: number;
+  per_tx_limit_cents?: number;
+  daily_limit_cents: number;
+  allowed_domains?: string[];
+}
+
+export interface SpawnAgentResponse {
+  agent_id: string;
+  parent_id: string;
+  api_key: string;
+  wallet_id: string;
+  limits: {
+    hourly_limit_cents: number;
+    per_tx_limit_cents: number;
+    daily_limit_cents: number;
+  };
+  allowed_domains: string[];
   warning: string;
 }
 

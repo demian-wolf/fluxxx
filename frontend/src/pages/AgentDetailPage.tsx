@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Ban, GitBranch, Pause, Play, Pencil, Plus } from "lucide-react";
+import { Ban, GitBranch, Pause, Play, Pencil, Plus, Zap } from "lucide-react";
 import { api } from "@/api";
 import { useToast } from "@/context/ToastContext";
 import { useAsync } from "@/hooks/useAsync";
@@ -15,6 +15,7 @@ import { LoadingState, ErrorState } from "@/components/ui/Spinner";
 import { SpendLineChart } from "@/components/charts/SpendLineChart";
 import { TransactionTable } from "@/components/domain/TransactionTable";
 import { formatCents, formatDateTime, pct, relativeTime } from "@/lib/utils";
+import type { AgentIdentity, SpawnAgentInput } from "@/types";
 
 export function AgentDetailPage() {
   const { id = "" } = useParams();
@@ -22,6 +23,9 @@ export function AgentDetailPage() {
   const { toast } = useToast();
   const [tab, setTab] = useState("overview");
   const [busy, setBusy] = useState(false);
+  const [showSpawn, setShowSpawn] = useState(false);
+  const [spawnBusy, setSpawnBusy] = useState(false);
+  const [spawnResult, setSpawnResult] = useState<{ api_key: string; agent_id: string } | null>(null);
 
   const agent = useAsync(() => api.getAgent(id), [id]);
   const analytics = useAsync(() => api.getAgentAnalytics(id), [id]);
@@ -191,17 +195,51 @@ export function AgentDetailPage() {
               title="Sub-agents"
               subtitle="Child agents spawned under this one. Suspending or revoking this agent cascades to all of them."
               right={
-                <Button
-                  variant="ghost"
-                  className="!px-2.5 !py-1.5 text-xs"
-                  onClick={() => navigate(`/agents/new?wallet=${a.wallet_id}&parent=${a.id}`)}
-                >
-                  <Plus className="h-3.5 w-3.5" /> Add sub-agent
-                </Button>
+                <span className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    className="!px-2.5 !py-1.5 text-xs"
+                    onClick={() => setShowSpawn(true)}
+                  >
+                    <Zap className="h-3.5 w-3.5" /> Spawn
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="!px-2.5 !py-1.5 text-xs"
+                    onClick={() => navigate(`/agents/new?wallet=${a.wallet_id}&parent=${a.id}`)}
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Add sub-agent
+                  </Button>
+                </span>
               }
             />
             <CardBody>
-              {children.length === 0 ? (
+              {showSpawn && (
+                <SpawnForm
+                  parent={a}
+                  siblings={children}
+                  busy={spawnBusy}
+                  result={spawnResult}
+                  onSpawn={async (input) => {
+                    setSpawnBusy(true);
+                    try {
+                      const res = await api.spawnAgent(a.id, input);
+                      setSpawnResult({ api_key: res.api_key, agent_id: res.agent_id });
+                      toast("success", "Sub-agent spawned", input.name);
+                      refreshLive();
+                    } catch (e) {
+                      toast("error", `Spawn failed: ${(e as Error).message}`);
+                    } finally {
+                      setSpawnBusy(false);
+                    }
+                  }}
+                  onClose={() => {
+                    setShowSpawn(false);
+                    setSpawnResult(null);
+                  }}
+                />
+              )}
+              {children.length === 0 && !showSpawn ? (
                 <p className="py-4 text-center text-sm text-ink-muted">
                   No sub-agents. This is a leaf in the spend tree.
                 </p>
@@ -301,6 +339,98 @@ function Meter({
         </span>
       </div>
       <ProgressBar percent={percent} tone={meterTone(percent)} className="mt-2" />
+    </div>
+  );
+}
+
+function SpawnForm({
+  parent,
+  siblings,
+  busy,
+  result,
+  onSpawn,
+  onClose,
+}: {
+  parent: AgentIdentity;
+  siblings: AgentIdentity[];
+  busy: boolean;
+  result: { api_key: string; agent_id: string } | null;
+  onSpawn: (input: SpawnAgentInput) => void;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [daily, setDaily] = useState("");
+
+  const allocated = siblings.reduce((sum, s) => sum + s.daily_limit_cents, 0);
+  const remaining = parent.daily_limit_cents - allocated;
+
+  if (result) {
+    return (
+      <div className="mb-4 rounded-lg border border-flux-green/30 bg-flux-green/5 p-4">
+        <p className="text-sm font-medium text-flux-green">Sub-agent spawned successfully</p>
+        <p className="mt-2 text-xs text-ink-muted">
+          Agent ID: <span className="font-mono text-ink">{result.agent_id}</span>
+        </p>
+        <p className="mt-1 text-xs text-ink-muted">
+          API Key (shown once):{" "}
+          <code className="rounded bg-bg-raised px-1.5 py-0.5 font-mono text-xs text-flux-cyan">
+            {result.api_key}
+          </code>
+        </p>
+        <Button variant="ghost" className="mt-3 !px-2.5 !py-1.5 text-xs" onClick={onClose}>
+          Done
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-4 rounded-lg border border-line bg-bg-raised/30 p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-sm font-medium text-ink">
+          <Zap className="mr-1.5 inline h-3.5 w-3.5 text-flux-cyan" />
+          Spawn sub-agent (agent-initiated fork)
+        </p>
+        <button onClick={onClose} className="text-xs text-ink-faint hover:text-ink">
+          Cancel
+        </button>
+      </div>
+      <p className="mb-3 text-xs text-ink-muted">
+        Budget remaining: <span className="font-mono text-ink">{formatCents(remaining)}/day</span>{" "}
+        (parent {formatCents(parent.daily_limit_cents)} \u2212 allocated {formatCents(allocated)})
+      </p>
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="flex flex-col gap-1 text-xs text-ink-muted">
+          Name
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="SubWorker"
+            className="w-40 rounded border border-line bg-bg-base px-2 py-1.5 font-mono text-sm text-ink placeholder:text-ink-faint focus:border-flux-cyan focus:outline-none"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-ink-muted">
+          Daily limit (cents)
+          <input
+            type="number"
+            value={daily}
+            onChange={(e) => setDaily(e.target.value)}
+            placeholder={String(remaining)}
+            min={1}
+            max={remaining}
+            className="w-32 rounded border border-line bg-bg-base px-2 py-1.5 font-mono text-sm text-ink placeholder:text-ink-faint focus:border-flux-cyan focus:outline-none"
+          />
+        </label>
+        <Button
+          variant="primary"
+          className="!px-3 !py-1.5 text-xs"
+          loading={busy}
+          disabled={!name.trim() || !daily || Number(daily) <= 0 || Number(daily) > remaining}
+          onClick={() => onSpawn({ name: name.trim(), daily_limit_cents: Number(daily) })}
+        >
+          Spawn
+        </Button>
+      </div>
     </div>
   );
 }

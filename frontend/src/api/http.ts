@@ -20,6 +20,8 @@ import type {
   PolicyRules,
   RegisterAgentInput,
   RegisterAgentResponse,
+  SpawnAgentInput,
+  SpawnAgentResponse,
   SpendPoint,
   SpendPolicy,
   TransactionRequest,
@@ -595,6 +597,12 @@ export function createHttpApi(baseUrl: string): FluxApi {
         api_key: res.api_key,
         warning: res.warning,
       };
+    },
+    async spawnAgent(_parentId: string, input: SpawnAgentInput): Promise<SpawnAgentResponse> {
+      return req<SpawnAgentResponse>("/api/agents/spawn", {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
     },
     async setAgentStatus(id, status): Promise<AgentIdentity> {
       return mapAgent(

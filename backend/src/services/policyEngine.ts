@@ -54,6 +54,7 @@ type PolicyRules = {
   blocked_domains?: string[];
   require_description?: boolean;
   auto_suspend_on_anomaly?: boolean;
+  can_spawn?: boolean;
 };
 
 /**

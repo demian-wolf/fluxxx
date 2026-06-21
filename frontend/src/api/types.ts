@@ -9,6 +9,8 @@ import type {
   PolicyRules,
   RegisterAgentInput,
   RegisterAgentResponse,
+  SpawnAgentInput,
+  SpawnAgentResponse,
   SpendPoint,
   SpendPolicy,
   TransactionRequest,
@@ -67,6 +69,7 @@ export interface FluxApi {
   listAgents(): Promise<AgentIdentity[]>;
   getAgent(id: string): Promise<AgentIdentity>;
   registerAgent(input: RegisterAgentInput): Promise<RegisterAgentResponse>;
+  spawnAgent(parentId: string, input: SpawnAgentInput): Promise<SpawnAgentResponse>;
   setAgentStatus(id: string, status: AgentIdentity["status"]): Promise<AgentIdentity>;
   getAgentAnalytics(id: string): Promise<{
     spent_last_hour_cents: number;
