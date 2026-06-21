@@ -44,6 +44,8 @@ export interface AgentIdentity {
   id: UUID;
   wallet_id: UUID;
   owner_id: UUID;
+  /** Parent agent in the spend tree; null for a root agent. */
+  parent_id: UUID | null;
   name: string;
   /** SHA-256 hash of the agent's secret API key. Raw key is never stored. */
   api_key_hash: string;

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { Ban, Pause, Play, Pencil } from "lucide-react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { Ban, GitBranch, Pause, Play, Pencil, Plus } from "lucide-react";
 import { api } from "@/api";
 import { useToast } from "@/context/ToastContext";
 import { useAsync } from "@/hooks/useAsync";
@@ -29,19 +29,33 @@ export function AgentDetailPage() {
   const txns = useAsync(() => api.listTransactions({ agentIds: [id] }), [id]);
   const policies = useAsync(() => api.listPolicies(id), [id]);
   const wallets = useAsync(() => api.listWallets(), []);
+  const allAgents = useAsync(() => api.listAgents(), []);
 
   const refreshLive = useCallback(() => {
     agent.refresh();
     analytics.refresh();
     series.refresh();
     txns.refresh();
-  }, [agent, analytics, series, txns]);
+    allAgents.refresh();
+  }, [agent, analytics, series, txns, allAgents]);
   useLiveLedger(refreshLive);
 
   const walletName = useMemo(
     () =>
       wallets.data?.find((w) => w.id === agent.data?.wallet_id)?.name ?? "—",
     [wallets.data, agent.data],
+  );
+
+  const parent = useMemo(
+    () =>
+      agent.data?.parent_id
+        ? allAgents.data?.find((x) => x.id === agent.data?.parent_id) ?? null
+        : null,
+    [allAgents.data, agent.data],
+  );
+  const children = useMemo(
+    () => (allAgents.data ?? []).filter((x) => x.parent_id === id),
+    [allAgents.data, id],
   );
 
   if (agent.loading) return <LoadingState />;
@@ -77,6 +91,16 @@ export function AgentDetailPage() {
             <AgentStatusBadge status={a.status} />
             <span className="text-xs text-ink-muted">
               Wallet: <span className="text-ink">{walletName}</span>
+            </span>
+            <span className="text-xs text-ink-muted">
+              Parent:{" "}
+              {parent ? (
+                <Link to={`/agents/${parent.id}`} className="text-flux-cyan hover:underline">
+                  {parent.name}
+                </Link>
+              ) : (
+                <span className="text-ink">root agent</span>
+              )}
             </span>
             <span className="text-xs text-ink-muted">
               Last seen:{" "}
@@ -158,6 +182,51 @@ export function AgentDetailPage() {
                   limitCents={a.hourly_limit_cents}
                   height={220}
                 />
+              )}
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader
+              title="Sub-agents"
+              subtitle="Child agents spawned under this one. Suspending or revoking this agent cascades to all of them."
+              right={
+                <Button
+                  variant="ghost"
+                  className="!px-2.5 !py-1.5 text-xs"
+                  onClick={() => navigate(`/agents/new?wallet=${a.wallet_id}&parent=${a.id}`)}
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add sub-agent
+                </Button>
+              }
+            />
+            <CardBody>
+              {children.length === 0 ? (
+                <p className="py-4 text-center text-sm text-ink-muted">
+                  No sub-agents. This is a leaf in the spend tree.
+                </p>
+              ) : (
+                <ul className="divide-y divide-line">
+                  {children.map((c) => (
+                    <li key={c.id}>
+                      <Link
+                        to={`/agents/${c.id}`}
+                        className="flex items-center justify-between gap-3 px-1 py-3 transition hover:text-flux-cyan"
+                      >
+                        <span className="flex items-center gap-2 text-sm font-medium text-ink">
+                          <GitBranch className="h-4 w-4 text-ink-faint" />
+                          {c.name}
+                        </span>
+                        <span className="flex items-center gap-3">
+                          <span className="font-mono text-xs text-ink-faint">
+                            {formatCents(c.daily_limit_cents)}/day
+                          </span>
+                          <AgentStatusBadge status={c.status} />
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
               )}
             </CardBody>
           </Card>

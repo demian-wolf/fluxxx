@@ -468,6 +468,7 @@ export const mockApi: FluxApi = {
       id: genId("agent"),
       wallet_id: input.wallet_id,
       owner_id: state.user.id,
+      parent_id: input.parent_id ?? null,
       name: input.name,
       api_key_preview: apiKey.slice(-4),
       status: "active",
@@ -508,6 +509,22 @@ export const mockApi: FluxApi = {
     await sleep(240);
     const a = requireAgent(id);
     a.status = status;
+    // Process-tree teardown: suspending/revoking a parent cascades to its whole
+    // subtree, mirroring the live backend. Reactivating is not cascaded.
+    if (status === "suspended" || status === "revoked") {
+      const queue = [a.id];
+      const seen = new Set(queue);
+      while (queue.length) {
+        const current = queue.shift() as string;
+        for (const child of state.agents) {
+          if (child.parent_id === current && !seen.has(child.id)) {
+            seen.add(child.id);
+            child.status = status;
+            queue.push(child.id);
+          }
+        }
+      }
+    }
     return structuredClone(a);
   },
 

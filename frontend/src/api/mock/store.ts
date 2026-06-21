@@ -50,6 +50,8 @@ const WALLET_OPS = "wallet_ops02";
 const AGENT_RESEARCH = "agent_researchbot1";
 const AGENT_DATAMINER = "agent_dataminer2";
 const AGENT_SCRAPER = "agent_scraper3";
+const AGENT_EMBED = "agent_embedworker4";
+const AGENT_HARVEST = "agent_linkharvest5";
 
 function checks(
   spec: Array<[string, string, boolean]>,
@@ -94,6 +96,7 @@ export function createInitialState(): MockState {
       id: AGENT_RESEARCH,
       wallet_id: WALLET_RESEARCH,
       owner_id: OPERATOR_ID,
+      parent_id: null,
       name: "ResearchBot v1",
       api_key_preview: "a4f9",
       status: "active",
@@ -109,6 +112,7 @@ export function createInitialState(): MockState {
       id: AGENT_DATAMINER,
       wallet_id: WALLET_RESEARCH,
       owner_id: OPERATOR_ID,
+      parent_id: AGENT_RESEARCH,
       name: "DataMiner",
       api_key_preview: "9c1b",
       status: "suspended",
@@ -121,9 +125,26 @@ export function createInitialState(): MockState {
       last_seen_at: hoursAgo(2),
     },
     {
+      id: AGENT_EMBED,
+      wallet_id: WALLET_RESEARCH,
+      owner_id: OPERATOR_ID,
+      parent_id: AGENT_DATAMINER,
+      name: "EmbeddingsWorker",
+      api_key_preview: "5b3a",
+      status: "active",
+      hourly_limit_cents: 150,
+      per_tx_limit_cents: 8,
+      daily_limit_cents: 800,
+      allowed_domains: ["openai.com"],
+      blocked_domains: [],
+      created_at: hoursAgo(30),
+      last_seen_at: minutesAgo(6),
+    },
+    {
       id: AGENT_SCRAPER,
       wallet_id: WALLET_OPS,
       owner_id: OPERATOR_ID,
+      parent_id: null,
       name: "CrawlerOps",
       api_key_preview: "2e7d",
       status: "active",
@@ -134,6 +155,22 @@ export function createInitialState(): MockState {
       blocked_domains: ["gambling.com", "ads.example.com"],
       created_at: hoursAgo(40),
       last_seen_at: minutesAgo(12),
+    },
+    {
+      id: AGENT_HARVEST,
+      wallet_id: WALLET_OPS,
+      owner_id: OPERATOR_ID,
+      parent_id: AGENT_SCRAPER,
+      name: "LinkHarvester",
+      api_key_preview: "8d2c",
+      status: "active",
+      hourly_limit_cents: 300,
+      per_tx_limit_cents: 20,
+      daily_limit_cents: 2000,
+      allowed_domains: [],
+      blocked_domains: ["gambling.com"],
+      created_at: hoursAgo(28),
+      last_seen_at: minutesAgo(20),
     },
   ];
 

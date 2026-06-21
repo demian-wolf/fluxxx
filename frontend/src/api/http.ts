@@ -71,6 +71,7 @@ interface WireAgent {
   id: string;
   walletId: string;
   ownerId: string;
+  parentId: string | null;
   name: string;
   status: AgentStatus;
   hourlyLimitCents: number;
@@ -195,6 +196,7 @@ function mapAgent(w: WireAgent, keyPreview = ""): AgentIdentity {
     id: w.id,
     wallet_id: w.walletId,
     owner_id: w.ownerId,
+    parent_id: w.parentId ?? null,
     name: w.name,
     api_key_preview: keyPreview,
     status: w.status,
@@ -578,6 +580,7 @@ export function createHttpApi(baseUrl: string): FluxApi {
           method: "POST",
           body: JSON.stringify({
             wallet_id: input.wallet_id,
+            parent_id: input.parent_id ?? null,
             name: input.name,
             hourly_limit_cents: input.hourly_limit_cents,
             per_tx_limit_cents: input.per_tx_limit_cents,

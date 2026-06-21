@@ -1,4 +1,4 @@
-import { integer, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { type AnyPgColumn, integer, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { usersTable } from "./users";
 import { agentWalletsTable } from "./agent_wallets";
@@ -9,6 +9,10 @@ export const agentIdentitiesTable = pgTable("agent_identities", {
   id:               uuid("id").primaryKey().defaultRandom(),
   walletId:         uuid("wallet_id").notNull().references(() => agentWalletsTable.id, { onDelete: "cascade" }),
   ownerId:          uuid("owner_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  // Self-reference modelling the agent process tree: a parent agent spawns
+  // child sub-agents. Null = root agent. Deleting a parent cascades to its
+  // whole subtree (OS-style process-tree teardown).
+  parentId:         uuid("parent_id").references((): AnyPgColumn => agentIdentitiesTable.id, { onDelete: "cascade" }),
   name:             text("name").notNull(),
   apiKeyHash:       text("api_key_hash").notNull().unique(),
   status:           agentStatusEnum("status").notNull().default("active"),
