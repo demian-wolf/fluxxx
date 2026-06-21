@@ -17,6 +17,9 @@ import type {
   GcStatus,
   LedgerEntry,
   MolliePayment,
+  OobKillEvent,
+  OobSimulateResult,
+  OobStatus,
   PaymentMethod,
   PolicyCheck,
   PolicyRules,
@@ -695,6 +698,44 @@ export function createHttpApi(baseUrl: string): FluxApi {
       return req<SweepResult>("/api/gc/sweep", {
         method: "POST",
         body: JSON.stringify(ttlMs != null ? { ttl_ms: ttlMs } : {}),
+      });
+    },
+
+    async getOobStatus(): Promise<OobStatus> {
+      return req<OobStatus>("/api/oob/status");
+    },
+    async listOobEvents(): Promise<OobKillEvent[]> {
+      const events = await req<Array<{
+        id: string;
+        walletId: string;
+        triggerBalanceCents: number;
+        thresholdCents: number;
+        agentsKilled: number;
+        tokensInvalidated: number;
+        protectedAgentId: string | null;
+        protectedAgentName: string | null;
+        killedAgentIds: string[] | null;
+        killedAgentNames: string[] | null;
+        createdAt: string;
+      }>>("/api/oob/events");
+      return events.map((e) => ({
+        id: e.id,
+        wallet_id: e.walletId,
+        trigger_balance_cents: e.triggerBalanceCents,
+        threshold_cents: e.thresholdCents,
+        agents_killed: e.agentsKilled,
+        tokens_invalidated: e.tokensInvalidated,
+        protected_agent_id: e.protectedAgentId,
+        protected_agent_name: e.protectedAgentName,
+        killed_agent_ids: e.killedAgentIds ?? [],
+        killed_agent_names: e.killedAgentNames ?? [],
+        created_at: e.createdAt,
+      }));
+    },
+    async simulateOobKill(walletId: string, thresholdCents?: number): Promise<OobSimulateResult> {
+      return req<OobSimulateResult>("/api/oob/simulate", {
+        method: "POST",
+        body: JSON.stringify({ wallet_id: walletId, ...(thresholdCents != null ? { threshold_cents: thresholdCents } : {}) }),
       });
     },
   };

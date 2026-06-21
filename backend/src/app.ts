@@ -8,6 +8,7 @@ import paymentRoutes from "./routes/payments";
 import webhookRoutes from "./routes/webhooks";
 import walletRoutes from "./routes/wallets";
 import gcRoutes from "./routes/gc";
+import oobRoutes from "./routes/oob";
 
 export function createApp(): express.Express {
   const app = express();
@@ -26,6 +27,7 @@ export function createApp(): express.Express {
   app.use("/api/webhooks", webhookRoutes);
   app.use("/api/wallets", walletRoutes);
   app.use("/api/gc", gcRoutes);
+  app.use("/api/oob", oobRoutes);
 
   app.use((_req, res) => {
     res.status(404).json({ error: "not_found" });

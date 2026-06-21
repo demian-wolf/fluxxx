@@ -6,3 +6,4 @@ export * from "./ledger_entries";
 export * from "./mollie_payments";
 export * from "./transaction_requests";
 export * from "./gc_events";
+export * from "./oob_kill_events";
