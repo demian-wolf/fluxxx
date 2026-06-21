@@ -60,6 +60,29 @@ This is a known UX pattern in the app — buttons are enabled before their depen
   - **Tokens Invalidated**: Will be 0 if no pending transactions exist at kill time (seed data has all settled transactions). To test token invalidation, you'd need to trigger a kill while a transaction is in "pending" state.
 - The mock simulation also runs `runOobCheck()` after every simulated spend tick, so if you wait long enough for the wallet to drain to €5 naturally, it will auto-trigger without the Simulate button. However, with seed balances of €19.90/€47.25 and spends of €0.05/tick every 2-5 seconds, natural drain takes many minutes.
 
+## Billing & Monetization (PR #14) specifics
+- **Billing page** (`/billing`): Stat cards (Current Plan, Transaction Fee %, Monthly Volume, Fees Collected) + SaaS plan cards (Free/Pro/Enterprise) + fee ledger table.
+- **Seed billing state**: tier="pro", tx_fee_bps=150 (1.5%), monthly_volume=€67.15, fees_collected=€1.01, 4 txns billed.
+- **SaaS Plans**: Free (€0/mo, 3%), Pro (€49/mo, 1.5%), Enterprise (€499/mo, 1%). Current plan shows "current" badge and disabled button.
+- **Plan upgrade flow**: Click "Upgrade" on a different tier → stat cards update immediately (tier + fee rate change), badge moves, toast shown. This is a good adversarial test — verify the fee rate actually changes.
+- **Fee ledger**: 3 seed rows (reversed order): CrawlerOps (€2.75/−€0.04/€2.71/1.5%), ResearchBot v1 ×2 (€0.05/−€0.01/€0.04/1.5%).
+- **Transaction detail fee card**: On any approved transaction, a "Platform fee" card appears showing Gross/Fee rate/Fee/Net. The fee rate reflects the *current* billing tier (changes if you upgrade/downgrade mid-session).
+
+## Provider Marketplace (PR #14) specifics
+- **Page**: `/providers` — stat cards (Total/Verified/Revenue/Pending) + provider registry table.
+- **Seed providers**: Dataset.io (verified, €25, 847 verifications), ProxyMesh (verified, €50, 312), ArXiv Premium (pending, €10, 0), SerpAPI (verified, €30, 156).
+- **Stats**: Total=4, Verified=3, Revenue=€1,437.50, Pending=1.
+- **Verify action**: Only pending providers show a "Verify" button. Clicking it changes status to verified and updates stats. Good adversarial check: verify Pending goes from 1→0 and Verified goes from 3→4.
+
+## White-Label Licensing (PR #14) specifics
+- **Page**: `/licensing` — stat cards (Total/Active/Monthly Revenue/API Calls) + license table with progress bars.
+- **Seed licenses**: LangChain (active, €2,500/mo, 14,820/50,000 API calls), CrewAI (active, €1,500/mo, 8,340/25,000), AutoGen (trial, free, 1,205/5,000).
+- **Stats**: Total=3, Active=2, Revenue=€4,000.00, API Calls=24,365.
+- **Progress bars**: Each license row shows API usage with a colored ProgressBar. AutoGen (trial) shows "Trial" instead of a monthly fee amount.
+
+## Sidebar navigation
+All pages in order: Dashboard, Wallets, Agents, Transactions, Capital Reclamation, OOB Killer, **Billing & Fees**, **Providers**, **Licensing**, Settings.
+
 ## Lint/typecheck/build
 ```bash
 (cd frontend && npm run lint && npm run typecheck && npm run build)
