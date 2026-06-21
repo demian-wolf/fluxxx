@@ -96,9 +96,11 @@ router.post(
       return;
     }
 
-    // Approved: atomically write ledger entry + update balance, then issue token.
+    // Approved: write spend + platform fee ledger entries, then issue token.
     const token     = generatePaymentToken();
     const expiresAt = new Date(Date.now() + config.flux.tokenTtlSeconds * 1000);
+
+    const feeCents = Math.round((amount_cents * agent.feePercentBps) / 10000);
 
     const entry = await writeLedgerEntry({
       walletId:           wallet.id,
@@ -110,6 +112,19 @@ router.post(
       payeeUrl:           payee_url,
       paymentToken:       token,
     });
+
+    if (feeCents > 0) {
+      await writeLedgerEntry({
+        walletId:           wallet.id,
+        walletBalanceCents: entry.balanceAfterCents,
+        agentId:            agent.id,
+        type:               "fee",
+        amountCents:        feeCents,
+        description:        `FLUX platform fee (${(agent.feePercentBps / 100).toFixed(2)}%)`,
+        payeeUrl:           payee_url,
+        metadata:           { baseAmountCents: amount_cents, feePercentBps: agent.feePercentBps },
+      });
+    }
 
     const [txn] = await db
       .insert(transactionRequestsTable)
@@ -135,7 +150,9 @@ router.post(
       decision:            "approved",
       payment_token:       token,
       token_expires_at:    expiresAt.toISOString(),
-      balance_after_cents: entry.balanceAfterCents,
+      balance_after_cents: entry.balanceAfterCents - feeCents,
+      fee_cents:           feeCents,
+      fee_percent_bps:     agent.feePercentBps,
       transaction_id:      txn.id,
       ...(oobResult.triggered ? { oob_kill_triggered: true, oob_agents_killed: oobResult.agentsKilled } : {}),
     });

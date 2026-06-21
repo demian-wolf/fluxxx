@@ -30,7 +30,8 @@ export function createApp(): express.Express {
   app.use("/api/transactions", transactionRoutes);
   app.use("/api/tokens", tokenRoutes);
   app.use("/api/payments", paymentRoutes);
-  app.use("/api/webhooks", webhookRoutes);
+  // Mollie webhooks are sent as application/x-www-form-urlencoded.
+  app.use("/api/webhooks", express.urlencoded({ extended: true }), webhookRoutes);
   app.use("/api/wallets", walletRoutes);
   app.use("/api/gc", gcRoutes);
   app.use("/api/oob", oobRoutes);

@@ -1,20 +1,35 @@
 /**
- * Mollie integration (backend-architecture.md section 4).
+ * Mollie integration using the official @mollie/api-client.
  *
- * Real REST calls to api.mollie.com using MOLLIE_API_KEY.
- * Idempotency-Key header guards against duplicate processing on webhook retries.
+ * Falls back to a deterministic stub when MOLLIE_API_KEY is empty so the
+ * payment flow can be exercised locally without a real Mollie account.
  */
 import { v4 as uuidv4 } from "uuid";
+import createMollieClient from "@mollie/api-client";
+import { eq } from "drizzle-orm";
 import { config } from "../config/env";
+import { db } from "../db";
+import { agentWalletsTable, molliePaymentsTable } from "../db/schema";
+import { writeLedgerEntry } from "./ledger";
 
-const MOLLIE_BASE = "https://api.mollie.com/v2";
+export type MollieStatus = "open" | "pending" | "paid" | "failed" | "expired";
+export type MollieMethod = "ideal" | "creditcard" | "bancontact" | "banktransfer" | "paypal";
 
-type MollieStatus = "open" | "pending" | "paid" | "failed" | "expired";
+export const SUPPORTED_METHODS: MollieMethod[] = [
+  "ideal",
+  "creditcard",
+  "bancontact",
+  "banktransfer",
+  "paypal",
+];
 
 export interface CreatePaymentInput {
   amountCents: number;
   description: string;
+  method?: MollieMethod;
   idempotencyKey?: string;
+  redirectUrl?: string;
+  webhookUrl?: string;
 }
 
 export interface CreatePaymentResult {
@@ -30,92 +45,138 @@ export interface RemotePayment {
   amountCents: number;
 }
 
-function authHeader(): string {
-  return `Bearer ${config.mollie.apiKey}`;
+function mollieClient() {
+  return createMollieClient({ apiKey: config.mollie.apiKey });
+}
+
+function euros(cents: number): string {
+  return (cents / 100).toFixed(2);
+}
+
+function defaultRedirectUrl(): string {
+  const base = config.flux.appUrl || config.mollie.redirectUrl;
+  if (!base) throw new Error("FLUX_APP_URL or MOLLIE_REDIRECT_URL is required");
+  return `${base.replace(/\/$/, "")}/payments/success`;
+}
+
+function defaultWebhookUrl(): string {
+  const base = config.flux.appUrl || config.mollie.webhookUrl;
+  if (!base) throw new Error("FLUX_APP_URL or MOLLIE_WEBHOOK_URL is required");
+  return `${base.replace(/\/$/, "")}/api/webhooks/mollie`;
+}
+
+export function isValidMethod(method: string): method is MollieMethod {
+  return SUPPORTED_METHODS.includes(method as MollieMethod);
 }
 
 /**
  * Create a Mollie hosted-checkout payment session.
- * POST https://api.mollie.com/v2/payments
+ * Falls back to a stub when MOLLIE_API_KEY is empty.
  */
 export async function createPayment(
   input: CreatePaymentInput,
 ): Promise<CreatePaymentResult> {
-  const idempotencyKey = input.idempotencyKey ?? uuidv4();
-  const euros = (input.amountCents / 100).toFixed(2);
+  const molliePaymentId = `tr_${uuidv4().replace(/-/g, "").slice(0, 10)}`;
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
   if (!config.mollie.apiKey) {
-    const molliePaymentId = "tr_" + uuidv4().replace(/-/g, "").slice(0, 10);
     return {
       molliePaymentId,
-      checkoutUrl: `https://www.mollie.com/checkout/${molliePaymentId}`,
+      checkoutUrl: `${defaultRedirectUrl()}?mock_payment_id=${molliePaymentId}`,
       status: "open",
-      expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+      expiresAt,
     };
   }
 
-  const res = await fetch(`${MOLLIE_BASE}/payments`, {
-    method: "POST",
-    headers: {
-      "Authorization":   authHeader(),
-      "Content-Type":    "application/json",
-      "Idempotency-Key": idempotencyKey,
-    },
-    body: JSON.stringify({
-      amount:      { currency: "EUR", value: euros },
-      description: input.description,
-      redirectUrl: config.mollie.redirectUrl,
-      webhookUrl:  config.mollie.webhookUrl,
-    }),
+  const payment = await mollieClient().payments.create({
+    amount:      { currency: "EUR", value: euros(input.amountCents) },
+    description: input.description,
+    redirectUrl: input.redirectUrl || defaultRedirectUrl(),
+    webhookUrl:  input.webhookUrl || defaultWebhookUrl(),
+    metadata:    { idempotencyKey: input.idempotencyKey ?? uuidv4() },
+    method:      input.method as never,
   });
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Mollie createPayment failed ${res.status}: ${err}`);
-  }
-
-  const data = await res.json() as {
-    id: string;
-    status: MollieStatus;
-    expiresAt?: string;
-    _links: { checkout: { href: string } };
-  };
-
   return {
-    molliePaymentId: data.id,
-    checkoutUrl:     data._links.checkout.href,
-    status:          data.status,
-    expiresAt:       data.expiresAt ?? new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+    molliePaymentId: payment.id,
+    checkoutUrl:     payment.getCheckoutUrl() ?? `${defaultRedirectUrl()}?payment=${payment.id}`,
+    status:          payment.status as MollieStatus,
+    expiresAt:       payment.expiresAt ?? expiresAt,
   };
 }
 
 /**
  * Re-fetch a payment directly from Mollie to verify a webhook (anti-spoofing).
- * GET https://api.mollie.com/v2/payments/{id}
+ * Falls back to a stub when MOLLIE_API_KEY is empty.
  */
 export async function getPayment(molliePaymentId: string): Promise<RemotePayment> {
   if (!config.mollie.apiKey) {
     return { id: molliePaymentId, status: "paid", amountCents: 0 };
   }
 
-  const res = await fetch(`${MOLLIE_BASE}/payments/${molliePaymentId}`, {
-    headers: { "Authorization": authHeader() },
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Mollie getPayment failed ${res.status}: ${err}`);
-  }
-
-  const data = await res.json() as {
-    id: string;
-    status: MollieStatus;
-    amount: { value: string };
-  };
+  const payment = await mollieClient().payments.get(molliePaymentId);
 
   return {
-    id:          data.id,
-    status:      data.status,
-    amountCents: Math.round(parseFloat(data.amount.value) * 100),
+    id:          payment.id,
+    status:      payment.status as MollieStatus,
+    amountCents: Math.round(parseFloat(payment.amount.value) * 100),
   };
+}
+
+/**
+ * Record the final status of a Mollie payment and, if paid, credit the wallet.
+ * Used by the real webhook handler and by the mock payment simulator.
+ */
+export async function processPaymentUpdate(
+  molliePaymentId: string,
+  remoteStatus: MollieStatus,
+): Promise<{ processed: boolean; status: MollieStatus }> {
+  const [record] = await db
+    .select()
+    .from(molliePaymentsTable)
+    .where(eq(molliePaymentsTable.molliePaymentId, molliePaymentId))
+    .limit(1);
+
+  if (!record) {
+    return { processed: false, status: remoteStatus };
+  }
+
+  const now = new Date();
+
+  if (remoteStatus === "paid" && record.status !== "paid") {
+    const [wallet] = await db
+      .select({ id: agentWalletsTable.id, balanceCents: agentWalletsTable.balanceCents })
+      .from(agentWalletsTable)
+      .where(eq(agentWalletsTable.id, record.walletId))
+      .limit(1);
+
+    if (wallet) {
+      await writeLedgerEntry({
+        walletId:           wallet.id,
+        walletBalanceCents: wallet.balanceCents,
+        agentId:            null,
+        type:               "deposit",
+        amountCents:        record.amountCents,
+        description:        "Mollie deposit",
+        molliePaymentId,
+      });
+    }
+
+    await db
+      .update(molliePaymentsTable)
+      .set({ status: "paid", webhookReceivedAt: now })
+      .where(eq(molliePaymentsTable.id, record.id));
+  } else if (remoteStatus === "failed" || remoteStatus === "expired") {
+    await db
+      .update(molliePaymentsTable)
+      .set({ status: remoteStatus, webhookReceivedAt: now })
+      .where(eq(molliePaymentsTable.id, record.id));
+  } else {
+    await db
+      .update(molliePaymentsTable)
+      .set({ webhookReceivedAt: now })
+      .where(eq(molliePaymentsTable.id, record.id));
+  }
+
+  return { processed: true, status: remoteStatus };
 }

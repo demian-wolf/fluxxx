@@ -31,6 +31,7 @@
     "drizzle-zod": "^0.8.3",
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
+    "@mollie/api-client": "^4.0.0",
     "postgres": "^3.4.9",
     "uuid": "^9.0.1",
     "zod": "^3.25.76"

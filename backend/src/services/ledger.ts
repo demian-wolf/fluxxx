@@ -7,7 +7,7 @@ export interface LedgerWriteInput {
   walletId: UUID;
   walletBalanceCents: number;
   agentId: UUID | null;
-  type: "deposit" | "spend" | "refund" | "hold" | "release";
+  type: "deposit" | "spend" | "fee" | "refund" | "hold" | "release";
   amountCents: number;
   description: string;
   payeeUrl?: string | null;
@@ -25,6 +25,7 @@ function signedDelta(type: LedgerWriteInput["type"], amountCents: number): numbe
     case "release":
       return amountCents;
     case "spend":
+    case "fee":
     case "hold":
       return -amountCents;
     default:

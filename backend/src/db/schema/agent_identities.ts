@@ -19,6 +19,7 @@ export const agentIdentitiesTable = pgTable("agent_identities", {
   hourlyLimitCents: integer("hourly_limit_cents").notNull().default(200),
   perTxLimitCents:  integer("per_tx_limit_cents").notNull().default(10),
   dailyLimitCents:  integer("daily_limit_cents").notNull().default(1000),
+  feePercentBps:    integer("fee_percent_bps").notNull().default(150),
   allowedDomains:   text("allowed_domains").array(),
   createdAt:        timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   lastSeenAt:       timestamp("last_seen_at", { withTimezone: true }),
