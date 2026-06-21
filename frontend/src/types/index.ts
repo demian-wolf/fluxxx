@@ -248,3 +248,39 @@ export interface SweepResult {
   total_limit_freed: number;
   events: GcEvent[];
 }
+
+// ----- Out-of-Budget (OOB) Killer -----
+
+export interface OobKillEvent {
+  id: string;
+  wallet_id: string;
+  trigger_balance_cents: number;
+  threshold_cents: number;
+  agents_killed: number;
+  tokens_invalidated: number;
+  protected_agent_id: string | null;
+  protected_agent_name: string | null;
+  killed_agent_ids: string[];
+  killed_agent_names: string[];
+  created_at: ISODateString;
+}
+
+export interface OobStatus {
+  total_events: number;
+  total_agents_killed: number;
+  total_tokens_invalidated: number;
+  last_triggered_at: ISODateString | null;
+}
+
+export interface OobSimulateResult {
+  triggered: boolean;
+  wallet_id: string;
+  balance_cents: number;
+  threshold_cents: number;
+  agents_killed: number;
+  tokens_invalidated: number;
+  protected_agent_id: string | null;
+  protected_agent_name: string | null;
+  killed_agent_names: string[];
+  event: OobKillEvent | null;
+}

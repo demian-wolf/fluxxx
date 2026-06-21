@@ -4,6 +4,7 @@ import type {
   GcEvent,
   LedgerEntry,
   MolliePayment,
+  OobKillEvent,
   PolicyCheck,
   SpendPolicy,
   TransactionRequest,
@@ -44,6 +45,7 @@ export interface MockState {
   transactions: TransactionRequest[];
   payments: MolliePayment[];
   gcEvents: GcEvent[];
+  oobKillEvents: OobKillEvent[];
 }
 
 const OPERATOR_ID = "user_operator01";
@@ -467,6 +469,7 @@ export function createInitialState(): MockState {
     transactions,
     payments: [],
     gcEvents: [],
+    oobKillEvents: [],
   };
 }
 

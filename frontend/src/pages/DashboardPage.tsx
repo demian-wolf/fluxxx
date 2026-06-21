@@ -12,6 +12,7 @@ import { WalletSummaryCard } from "@/components/dashboard/WalletSummaryCard";
 import { LiveFeed } from "@/components/dashboard/LiveFeed";
 import { AgentStatusPanel } from "@/components/dashboard/AgentStatusPanel";
 import { GcStatusWidget } from "@/components/dashboard/GcStatusWidget";
+import { OobStatusWidget } from "@/components/dashboard/OobStatusWidget";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingState } from "@/components/ui/Spinner";
 
@@ -27,12 +28,14 @@ export function DashboardPage() {
   );
 
   const gcStatus = useAsync(() => api.getGcStatus(), []);
+  const oobStatus = useAsync(() => api.getOobStatus(), []);
 
   const onLive = useCallback(() => {
     analytics.refresh();
     gcStatus.refresh();
+    oobStatus.refresh();
     refreshWallets();
-  }, [analytics, gcStatus, refreshWallets]);
+  }, [analytics, gcStatus, oobStatus, refreshWallets]);
   useLiveLedger(onLive);
   useRefreshOnFocus(onLive);
 
@@ -116,6 +119,7 @@ export function DashboardPage() {
         <div className="lg:col-span-3">
           <WalletSummaryCard wallet={selected} analytics={analytics.data} />
           <GcStatusWidget status={gcStatus.data} />
+          <OobStatusWidget status={oobStatus.data} />
         </div>
         <div className="lg:col-span-6">
           <LiveFeed walletId={selected.id} />

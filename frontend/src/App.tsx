@@ -16,6 +16,7 @@ import { TransactionsPage } from "@/pages/TransactionsPage";
 import { TransactionDetailPage } from "@/pages/TransactionDetailPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { GcPage } from "@/pages/GcPage";
+import { OobPage } from "@/pages/OobPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 
 function RootRedirect() {
@@ -44,6 +45,7 @@ export default function App() {
         <Route path="/transactions" element={<TransactionsPage />} />
         <Route path="/transactions/:id" element={<TransactionDetailPage />} />
         <Route path="/gc" element={<GcPage />} />
+        <Route path="/oob" element={<OobPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
 

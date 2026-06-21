@@ -7,6 +7,7 @@ import { userAuth } from "../middleware/userAuth";
 import { asyncHandler } from "../utils/asyncHandler";
 import { evaluate } from "../services/policyEngine";
 import { writeLedgerEntry } from "../services/ledger";
+import { checkAndKill } from "../services/oobKiller";
 import { generatePaymentToken } from "../services/auth";
 import { config } from "../config/env";
 import { RejectionReason } from "../types";
@@ -125,12 +126,18 @@ router.post(
       })
       .returning({ id: transactionRequestsTable.id });
 
+    // OOB Killer: check if the wallet balance has dropped to the critical
+    // threshold after this spend. If so, revoke non-essential child agents to
+    // preserve funds for the root agent (analogous to the OS OOM Killer).
+    const oobResult = await checkAndKill(wallet.id);
+
     res.json({
       decision:            "approved",
       payment_token:       token,
       token_expires_at:    expiresAt.toISOString(),
       balance_after_cents: entry.balanceAfterCents,
       transaction_id:      txn.id,
+      ...(oobResult.triggered ? { oob_kill_triggered: true, oob_agents_killed: oobResult.agentsKilled } : {}),
     });
   }),
 );

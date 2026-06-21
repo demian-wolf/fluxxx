@@ -17,6 +17,9 @@ import type {
   GcStatus,
   LedgerEntry,
   MolliePayment,
+  OobKillEvent,
+  OobSimulateResult,
+  OobStatus,
   PolicyCheck,
   PolicyRules,
   RegisterAgentInput,
@@ -197,6 +200,8 @@ function simulateTick() {
       policy_checks: checks,
       created_at: ts,
     });
+    // OOB Killer check: if balance drops to threshold, kill non-essential children
+    runOobCheck(wallet.id);
   } else {
     state.transactions.push({
       id: genId("tx"),
@@ -367,6 +372,106 @@ function runMockSweep(): SweepResult {
 
 function simulateGcTick() {
   runMockSweep();
+}
+
+// ---- OOB Killer simulation -------------------------------------------------
+
+const OOB_THRESHOLD_CENTS = 500; // €5
+
+function runOobCheck(walletId: string, thresholdCents: number = OOB_THRESHOLD_CENTS): OobSimulateResult {
+  const wallet = state.wallets.find((w) => w.id === walletId);
+  if (!wallet || wallet.balance_cents > thresholdCents) {
+    return {
+      triggered: false,
+      wallet_id: walletId,
+      balance_cents: wallet?.balance_cents ?? 0,
+      threshold_cents: thresholdCents,
+      agents_killed: 0,
+      tokens_invalidated: 0,
+      protected_agent_id: null,
+      protected_agent_name: null,
+      killed_agent_names: [],
+      event: null,
+    };
+  }
+
+  // Find root agents to protect
+  const rootAgents = state.agents.filter(
+    (a) => a.wallet_id === walletId && a.parent_id === null && a.status === "active",
+  );
+  const protectedAgent = rootAgents.length > 0 ? rootAgents[0] : null;
+
+  // Find child agents to kill
+  const childAgents = state.agents.filter(
+    (a) => a.wallet_id === walletId && a.parent_id !== null && a.status === "active",
+  );
+
+  if (childAgents.length === 0) {
+    return {
+      triggered: false,
+      wallet_id: walletId,
+      balance_cents: wallet.balance_cents,
+      threshold_cents: thresholdCents,
+      agents_killed: 0,
+      tokens_invalidated: 0,
+      protected_agent_id: protectedAgent?.id ?? null,
+      protected_agent_name: protectedAgent?.name ?? null,
+      killed_agent_names: [],
+      event: null,
+    };
+  }
+
+  const killedIds = childAgents.map((a) => a.id);
+  const killedNames = childAgents.map((a) => a.name);
+
+  // Revoke child agents
+  for (const agent of childAgents) {
+    agent.status = "revoked";
+  }
+
+  // Invalidate pending transactions from killed agents
+  let tokensInvalidated = 0;
+  for (const tx of state.transactions) {
+    if (
+      killedIds.includes(tx.agent_id) &&
+      tx.decision === "approved" &&
+      tx.payment_token &&
+      tx.token_expires_at &&
+      new Date(tx.token_expires_at).getTime() > Date.now()
+    ) {
+      tx.payment_token = null;
+      tokensInvalidated++;
+    }
+  }
+
+  const event: OobKillEvent = {
+    id: genId("oob"),
+    wallet_id: walletId,
+    trigger_balance_cents: wallet.balance_cents,
+    threshold_cents: thresholdCents,
+    agents_killed: killedIds.length,
+    tokens_invalidated: tokensInvalidated,
+    protected_agent_id: protectedAgent?.id ?? null,
+    protected_agent_name: protectedAgent?.name ?? null,
+    killed_agent_ids: killedIds,
+    killed_agent_names: killedNames,
+    created_at: new Date().toISOString(),
+  };
+  state.oobKillEvents.push(event);
+  emit();
+
+  return {
+    triggered: true,
+    wallet_id: walletId,
+    balance_cents: wallet.balance_cents,
+    threshold_cents: thresholdCents,
+    agents_killed: killedIds.length,
+    tokens_invalidated: tokensInvalidated,
+    protected_agent_id: protectedAgent?.id ?? null,
+    protected_agent_name: protectedAgent?.name ?? null,
+    killed_agent_names: killedNames,
+    event,
+  };
 }
 
 function ensureSimulation() {
@@ -911,5 +1016,36 @@ export const mockApi: FluxApi = {
     void ttlMs;
     await sleep(600);
     return structuredClone(runMockSweep());
+  },
+
+  async getOobStatus(): Promise<OobStatus> {
+    await sleep(140);
+    const totalAgentsKilled = state.oobKillEvents.reduce(
+      (sum, e) => sum + e.agents_killed,
+      0,
+    );
+    const totalTokensInvalidated = state.oobKillEvents.reduce(
+      (sum, e) => sum + e.tokens_invalidated,
+      0,
+    );
+    const lastEvent = state.oobKillEvents.length
+      ? state.oobKillEvents[state.oobKillEvents.length - 1]
+      : null;
+    return {
+      total_events: state.oobKillEvents.length,
+      total_agents_killed: totalAgentsKilled,
+      total_tokens_invalidated: totalTokensInvalidated,
+      last_triggered_at: lastEvent?.created_at ?? null,
+    };
+  },
+
+  async listOobEvents(): Promise<OobKillEvent[]> {
+    await sleep(180);
+    return structuredClone(state.oobKillEvents.slice().reverse());
+  },
+
+  async simulateOobKill(walletId: string, thresholdCents?: number): Promise<OobSimulateResult> {
+    await sleep(400);
+    return structuredClone(runOobCheck(walletId, thresholdCents));
   },
 };

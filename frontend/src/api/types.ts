@@ -8,6 +8,9 @@ import type {
   GcStatus,
   LedgerEntry,
   MolliePayment,
+  OobKillEvent,
+  OobSimulateResult,
+  OobStatus,
   PolicyRules,
   RegisterAgentInput,
   RegisterAgentResponse,
@@ -93,4 +96,9 @@ export interface FluxApi {
   getGcStatus(): Promise<GcStatus>;
   listGcEvents(): Promise<GcEvent[]>;
   triggerSweep(ttlMs?: number): Promise<SweepResult>;
+
+  // Out-of-Budget (OOB) Killer
+  getOobStatus(): Promise<OobStatus>;
+  listOobEvents(): Promise<OobKillEvent[]>;
+  simulateOobKill(walletId: string, thresholdCents?: number): Promise<OobSimulateResult>;
 }

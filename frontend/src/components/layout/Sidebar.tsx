@@ -5,6 +5,7 @@ import {
   Bot,
   ReceiptText,
   Recycle,
+  ShieldAlert,
   Settings,
   type LucideIcon,
 } from "lucide-react";
@@ -25,6 +26,7 @@ const items: NavItem[] = [
   { to: "/agents", label: "Agents", icon: Bot },
   { to: "/transactions", label: "Transactions", icon: ReceiptText },
   { to: "/gc", label: "Capital Reclamation", icon: Recycle },
+  { to: "/oob", label: "OOB Killer", icon: ShieldAlert },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 
