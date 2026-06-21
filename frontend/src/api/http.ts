@@ -25,6 +25,8 @@ import type {
   CreateDepositResponse,
   CurrencyConfig,
   DepletionForecast,
+  DevinSession,
+  DevinSessionStats,
   ExchangeRate,
   FeeEvent,
   GcEvent,
@@ -1007,6 +1009,25 @@ export function createHttpApi(baseUrl: string): FluxApi {
     },
     async listLicenses(): Promise<WhiteLabelLicense[]> {
       return req<WhiteLabelLicense[]>("/api/licenses");
+    },
+
+    async listDevinSessions() {
+      return req<DevinSession[]>("/api/devin/sessions");
+    },
+    async getDevinSessionStats() {
+      return req<DevinSessionStats>("/api/devin/stats");
+    },
+    async launchDevinSession(input) {
+      return req<DevinSession>("/api/devin/launch", {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+    },
+    async escalateDevinSession(sessionId, newLimitCents, limitField) {
+      return req<DevinSession>(`/api/devin/sessions/${sessionId}/escalate`, {
+        method: "POST",
+        body: JSON.stringify({ new_limit_cents: newLimitCents, limit_field: limitField }),
+      });
     },
   };
 }

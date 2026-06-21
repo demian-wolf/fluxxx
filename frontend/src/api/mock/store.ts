@@ -2,6 +2,7 @@ import type {
   AgentIdentity,
   AgentWallet,
   BillingAccount,
+  DevinSession,
   FeeEvent,
   GcEvent,
   LedgerEntry,
@@ -55,6 +56,7 @@ export interface MockState {
   feeEvents: FeeEvent[];
   providers: MarketplaceProvider[];
   licenses: WhiteLabelLicense[];
+  devinSessions: DevinSession[];
 }
 
 const OPERATOR_ID = "user_operator01";
@@ -597,6 +599,49 @@ export function createInitialState(): MockState {
     },
   ];
 
+  const devinSessions: DevinSession[] = [
+    {
+      id: genId("devin"),
+      devin_session_id: "abc123def456",
+      devin_session_url: "https://app.devin.ai/sessions/abc123def456",
+      agent_id: AGENT_RESEARCH,
+      agent_name: "Devin — Dataset Pipeline",
+      wallet_id: WALLET_RESEARCH,
+      wallet_name: "ResearchBot Budget",
+      task: "Build a data ingestion pipeline that pulls climate data from dataset.io, processes it with pandas, and stores results in PostgreSQL. Purchase any required API keys.",
+      status: "running",
+      total_spent_cents: 35,
+      transactions_approved: 7,
+      transactions_rejected: 1,
+      last_rejection_reason: "per_tx_limit_exceeded",
+      per_tx_limit_cents: 10,
+      hourly_limit_cents: 200,
+      daily_limit_cents: 1000,
+      created_at: minutesAgo(45),
+      updated_at: minutesAgo(2),
+    },
+    {
+      id: genId("devin"),
+      devin_session_id: "xyz789ghi012",
+      devin_session_url: "https://app.devin.ai/sessions/xyz789ghi012",
+      agent_id: AGENT_SCRAPER,
+      agent_name: "Devin — Proxy Integrator",
+      wallet_id: WALLET_OPS,
+      wallet_name: "Ops Automation",
+      task: "Write Express.js middleware that integrates FLUX token verification into the proxy API gateway. Test against the FLUX /api/tokens/verify endpoint.",
+      status: "completed",
+      total_spent_cents: 180,
+      transactions_approved: 12,
+      transactions_rejected: 0,
+      last_rejection_reason: null,
+      per_tx_limit_cents: 50,
+      hourly_limit_cents: 800,
+      daily_limit_cents: 5000,
+      created_at: hoursAgo(3),
+      updated_at: minutesAgo(90),
+    },
+  ];
+
   return {
     user,
     sessionToken: null,
@@ -612,6 +657,7 @@ export function createInitialState(): MockState {
     feeEvents,
     providers,
     licenses,
+    devinSessions,
   };
 }
 

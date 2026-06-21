@@ -548,3 +548,59 @@ export interface ConversionResult {
   rate: number;
   rateTimestamp: ISODateString;
 }
+
+// ----- Devin Integration -----
+
+export type DevinSessionStatus =
+  | "provisioning"
+  | "running"
+  | "paused"
+  | "completed"
+  | "failed";
+
+export interface DevinSession {
+  id: string;
+  devin_session_id: string | null;
+  devin_session_url: string | null;
+  agent_id: string;
+  agent_name: string;
+  wallet_id: string;
+  wallet_name: string;
+  task: string;
+  status: DevinSessionStatus;
+  total_spent_cents: number;
+  transactions_approved: number;
+  transactions_rejected: number;
+  last_rejection_reason: string | null;
+  per_tx_limit_cents: number;
+  hourly_limit_cents: number;
+  daily_limit_cents: number;
+  created_at: ISODateString;
+  updated_at: ISODateString;
+}
+
+export interface LaunchDevinInput {
+  wallet_id: string;
+  task: string;
+  agent_name?: string;
+  per_tx_limit_cents: number;
+  hourly_limit_cents: number;
+  daily_limit_cents: number;
+  allowed_domains?: string[];
+}
+
+export interface DevinSessionStats {
+  total_sessions: number;
+  active_sessions: number;
+  total_spent_cents: number;
+  total_transactions: number;
+  total_rejections: number;
+}
+
+export interface EscalationRequest {
+  session_id: string;
+  reason: string;
+  requested_amount_cents: number;
+  current_limit_field: string;
+  current_limit_cents: number;
+}

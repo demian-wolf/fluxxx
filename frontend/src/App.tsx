@@ -27,6 +27,7 @@ import { CurrencyPage } from "@/pages/CurrencyPage";
 import { BillingPage } from "@/pages/BillingPage";
 import { ProvidersPage } from "@/pages/ProvidersPage";
 import { LicensingPage } from "@/pages/LicensingPage";
+import { DevinPage } from "@/pages/DevinPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 
 function RootRedirect() {
@@ -67,6 +68,7 @@ export default function App() {
         <Route path="/billing" element={<BillingPage />} />
         <Route path="/providers" element={<ProvidersPage />} />
         <Route path="/licensing" element={<LicensingPage />} />
+        <Route path="/devin" element={<DevinPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
 

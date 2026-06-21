@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   Puzzle,
   Coins,
+  Zap,
   type LucideIcon,
 } from "lucide-react";
 import { Wordmark } from "@/components/Logo";
@@ -32,6 +33,7 @@ interface NavItem {
 
 const items: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/devin", label: "Devin Integration", icon: Zap },
   { to: "/wallets", label: "Wallets", icon: Wallet },
   { to: "/agents", label: "Agents", icon: Bot },
   { to: "/transactions", label: "Transactions", icon: ReceiptText },
