@@ -1,8 +1,7 @@
 import { NavLink, Link } from "react-router-dom";
 import {
   LayoutDashboard,
-  Wallet,
-  Bot,
+  Briefcase,
   ReceiptText,
   ShieldAlert,
   Settings,
@@ -36,8 +35,7 @@ const sections: NavSection[] = [
   {
     heading: "Operations",
     items: [
-      { to: "/wallets", label: "Wallets", icon: Wallet },
-      { to: "/agents", label: "Agents", icon: Bot },
+      { to: "/assets", label: "Assets", icon: Briefcase },
       { to: "/transactions", label: "Transactions", icon: ReceiptText },
     ],
   },
