@@ -5,6 +5,7 @@ import {
   ChevronDown,
   LogOut,
   Menu,
+  Search,
   Settings as SettingsIcon,
   Wallet as WalletIcon,
 } from "lucide-react";
@@ -208,6 +209,19 @@ export function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
         <WalletSelector />
       </div>
       <div className="flex items-center gap-2">
+        <button
+          onClick={() =>
+            window.dispatchEvent(new Event("open-command-palette"))
+          }
+          className="flex items-center gap-2 rounded-lg border border-line bg-bg-raised/60 px-3 py-2 text-sm text-ink-muted transition hover:border-flux-cyan/40 hover:text-ink"
+          aria-label="Open command palette"
+        >
+          <Search className="h-[18px] w-[18px]" />
+          <span className="hidden sm:inline">Search</span>
+          <kbd className="hidden rounded border border-line bg-bg-soft px-1.5 py-0.5 font-mono text-[10px] text-ink-faint sm:inline">
+            ⌘K
+          </kbd>
+        </button>
         <NotificationBell />
         <UserMenu />
       </div>

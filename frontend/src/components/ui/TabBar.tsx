@@ -26,14 +26,21 @@ export function TabBar<T extends Tab>({
             key={tab.key}
             onClick={() => onChange(tab.key)}
             className={cn(
-              "flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition",
+              "relative flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition",
               isActive
                 ? "bg-bg-raised text-ink shadow-sm"
                 : "text-ink-muted hover:bg-bg-raised/50 hover:text-ink",
             )}
           >
-            {Icon && <Icon className="h-4 w-4" />}
+            {Icon && (
+              <Icon
+                className={cn("h-4 w-4", isActive && "text-flux-cyan")}
+              />
+            )}
             {tab.label}
+            {isActive && (
+              <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-gradient-to-r from-flux-cyan to-flux-violet" />
+            )}
           </button>
         );
       })}
