@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, Link } from "react-router-dom";
 import {
   LayoutDashboard,
   Wallet,
@@ -55,9 +55,9 @@ const items: NavItem[] = [
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="flex h-full flex-col">
-      <div className="px-5 py-5">
+      <Link to="/" className="block px-5 py-5">
         <Wordmark />
-      </div>
+      </Link>
       <nav className="flex-1 space-y-1 px-3">
         {items.map(({ to, label, icon: Icon }) => (
           <NavLink
