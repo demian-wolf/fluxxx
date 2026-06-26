@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { WalletProvider } from "@/context/WalletContext";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
+import { CommandPalette } from "@/components/CommandPalette";
 import { LoadingState } from "@/components/ui/Spinner";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +25,7 @@ export function AppLayout() {
 
   return (
     <WalletProvider>
+      <CommandPalette />
       <div className="flex min-h-screen">
         {/* Desktop sidebar */}
         <aside className="hidden w-64 shrink-0 border-r border-line bg-bg-soft/60 lg:block">
