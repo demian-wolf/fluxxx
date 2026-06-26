@@ -1,9 +1,9 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Route, Routes } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { useAuth } from "@/context/AuthContext";
 import { LoginPage } from "@/pages/LoginPage";
 import { RegisterPage } from "@/pages/RegisterPage";
 import { DashboardPage } from "@/pages/DashboardPage";
+import { HomePage } from "@/pages/HomePage";
 import { WalletsPage } from "@/pages/WalletsPage";
 import { WalletDetailPage } from "@/pages/WalletDetailPage";
 import { DepositPage } from "@/pages/DepositPage";
@@ -30,16 +30,10 @@ import { LicensingPage } from "@/pages/LicensingPage";
 import { DevinPage } from "@/pages/DevinPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 
-function RootRedirect() {
-  const { user, loading } = useAuth();
-  if (loading) return null;
-  return <Navigate to={user ? "/dashboard" : "/login"} replace />;
-}
-
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<RootRedirect />} />
+      <Route path="/" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
 
